@@ -1,0 +1,116 @@
+// Applied only by build-presentation-android.ps1. Ordinary variants keep their existing configuration.
+def stagePath = System.getenv('TOPICTRAIL_PRESENTATION_STAGE')
+if (!stagePath) {
+  throw new GradleException('Run this init script through build-presentation-android.ps1.')
+}
+def stage = new File(stagePath).canonicalFile
+
+gradle.beforeProject { project ->
+  def applicationRoot = project.rootProject.projectDir.canonicalFile
+  def modules = new File(stage.parentFile, 'node_modules').canonicalFile
+  def shortProjectPath = Integer.toUnsignedString(project.path.hashCode(), 36)
+  if (applicationRoot.toPath().startsWith(modules.toPath())) {
+    // Included Kotlin build products also have protected historical outputs.
+    def includedBuild = [
+      'gradle-plugin-root': 'rn',
+      'expo-gradle-plugin': 'expo'
+    ][project.rootProject.name] ?: "i${Integer.toUnsignedString(applicationRoot.path.hashCode(), 36)}"
+    project.layout.buildDirectory.set(new File(stage, "b/$includedBuild/$shortProjectPath"))
+    return
+  }
+
+  if (applicationRoot.name != 'android' || stage.parentFile != applicationRoot.parentFile) {
+    // Gradle also applies init scripts to the included plugin builds.
+    if (project.path == ':app') {
+      throw new GradleException('Presentation staging must be inside the main TopicTrail project.')
+    }
+    return
+  }
+
+  // Settings generates autolinking metadata in the root build directory, so keep its location.
+  if (project.path == ':') {
+    return
+  }
+  // Isolate project outputs from their protected historical build directories.
+  def nativeOutputs = [
+    ':app': 'a',
+    ':react-native-worklets': 'w',
+    ':react-native-reanimated': 'r',
+    ':react-native-gesture-handler': 'g',
+    ':react-native-screens': 's',
+    ':expo-modules-core': 'e'
+  ]
+  def destination = nativeOutputs[project.path] ?: "m$shortProjectPath"
+
+  project.layout.buildDirectory.set(new File(stage, "b/$destination"))
+  if (project.path == ':expo') {
+    // The inline-module generator requires both paths to be below an android directory.
+    project.layout.buildDirectory.set(new File(stage, 'android/b/expo'))
+    project.tasks.matching { it.name == 'generateInlineModules' }.configureEach { task ->
+      task.mirrorDirectory.set(new File(stage, 'android/inline-mirror'))
+    }
+  }
+  def androidPlugin = project.path == ':app' ? 'com.android.application' : 'com.android.library'
+  project.pluginManager.withPlugin(androidPlugin) {
+    def android = project.extensions.getByName('android')
+    android.externalNativeBuild.cmake.buildStagingDirectory = new File(stage, "x/$destination")
+    if (project.path != ':app') {
+      return
+    }
+
+    // Use the cached Debug dependencies for a separately installable standalone app.
+    def debug = android.buildTypes.getByName('debug')
+    debug.applicationIdSuffix = '.presentation'
+    debug.debuggable = false
+
+    def sourceManifest = project.file('src/main/AndroidManifest.xml').getText('UTF-8')
+    def label = 'android:label="@string/app_name"'
+    def scheme = 'android:scheme="topictrail"'
+    if (sourceManifest.count(label) != 1 || sourceManifest.count(scheme) != 1) {
+      throw new GradleException('The presentation substitutions no longer match the main manifest.')
+    }
+    def manifest = new File(stage, 'AndroidManifest.xml')
+    def contents = sourceManifest
+      .replace(label, 'android:label="TopicTrail Presentation"')
+      .replace(scheme, 'android:scheme="topictrail-presentation"')
+    if (!manifest.exists() || manifest.getText('UTF-8') != contents) {
+      manifest.setText(contents, 'UTF-8')
+    }
+    android.sourceSets.getByName('main').manifest.srcFile(manifest)
+  }
+
+  if (project.path == ':app') {
+    project.pluginManager.withPlugin('com.facebook.react') {
+      project.extensions.getByName('react').debuggableVariants.set([])
+    }
+    project.tasks.matching { it.name == 'createBundleDebugJsAndAssets' }.configureEach { task ->
+      // React Native excludes its default android/build directories from the app source tree.
+      // Also exclude this build's in-project staging, checkpoints, and packaged outputs.
+      task.sources.exclude(stage.name + '/**', 'work/**', 'deliverables/**')
+      task.inputs.dir(new File(stage.parentFile, 'assets'))
+      task.inputs.file(new File(stage.parentFile, 'app.json'))
+    }
+    project.tasks.matching { it.name == 'generateAutolinkingNewArchitectureFiles' }.configureEach { task ->
+      task.doLast {
+        def cmake = new File(task.generatedOutputDirectory.get().asFile, 'Android-autolinking.cmake')
+        def contents = cmake.getText('UTF-8')
+        def cmakePath = { File file -> file.absolutePath.replace('\\', '/').replace(' ', '\\ ') }
+        def jni = 'generated/source/codegen/jni'
+        project.rootProject.subprojects.each { dependency ->
+          def original = cmakePath(new File(dependency.projectDir, "build/$jni"))
+          def staged = cmakePath(dependency.layout.buildDirectory.dir(jni).get().asFile)
+          contents = contents.replace(original, staged)
+        }
+        // Shorten only generated CMake binary directories to fit Windows Ninja's path limit.
+        int index = 0
+        contents = contents.replaceAll(/(?m)^([ \t]*add_subdirectory\("[^"\r\n]+"[ \t]+)[A-Za-z0-9_]+_autolinked_build(\)[ \t]*\r?)$/) {
+          match, prefix, suffix -> "${prefix}tt${index++}${suffix}"
+        }
+        if (index == 0) {
+          throw new GradleException('No generated CMake binary directories could be shortened.')
+        }
+        cmake.setText(contents, 'UTF-8')
+      }
+    }
+  }
+}

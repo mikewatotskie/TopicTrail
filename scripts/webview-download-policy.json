@@ -1,0 +1,29 @@
+{
+  "packageName": "react-native-webview",
+  "version": "14.0.1",
+  "policyVersion": 1,
+  "upstreamLicense": "MIT License\n\nCopyright (c) 2015-present, Facebook, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "files": [
+    {
+      "path": "android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt",
+      "originalSha256": "0ab91755bd50f9000a062a8b5f4408ab0582db20165fa809751456375321d37d",
+      "patchedSha256": "13be3bb212bec5e1f7f0f75f05b91377541bfc95eae210fecfbbe2e578f7270e",
+      "before": "        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->\n            val module = webView.reactApplicationContext.getNativeModule(RNCWebViewModule::class.java) ?: return@DownloadListener\n            val request: DownloadManager.Request = try {\n                DownloadManager.Request(Uri.parse(url))\n            } catch (e: IllegalArgumentException) {\n                Log.w(TAG, \"Unsupported URI, aborting download\", e)\n                return@DownloadListener\n            }\n            var fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)\n\n            // Sanitize filename by replacing invalid characters with \"_\"\n            fileName = fileName.replace(invalidCharRegex, \"_\")\n\n            val downloadMessage = \"Downloading $fileName\"\n\n            //Attempt to add cookie, if it exists\n            var urlObj: URL? = null\n            try {\n                urlObj = URL(url)\n                val baseUrl = urlObj.protocol + \"://\" + urlObj.host\n                val cookie = CookieManager.getInstance().getCookie(baseUrl)\n                request.addRequestHeader(\"Cookie\", cookie)\n            } catch (e: MalformedURLException) {\n                Log.w(TAG, \"Error getting cookie for DownloadManager\", e)\n            }\n\n            //Finish setting up request\n            request.addRequestHeader(\"User-Agent\", userAgent)\n            request.setTitle(fileName)\n            request.setDescription(downloadMessage)\n            request.allowScanningByMediaScanner()\n            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)\n            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)\n            module.setDownloadRequest(request)\n            if (module.grantFileDownloaderPermissions(\n                    getDownloadingMessageOrDefault(),\n                    getLackPermissionToDownloadMessageOrDefault()\n                )\n            ) {\n                module.downloadFile(\n                    getDownloadingMessageOrDefault()\n                )\n            }\n        })\n",
+      "after": "        // TopicTrail policy v1: deny native downloads for every package WebView.\n        // Capability exports are installed only after this guarded listener patch.\n        webView.setDownloadListener(DownloadListener { url, _, _, _, _ ->\n            webView.stopLoading()\n            webView.getRNCWebViewClient()?.onReceivedError(\n                webView,\n                -9001,\n                \"Downloads are not supported in this viewer.\",\n                url\n            )\n        })\n"
+    },
+    {
+      "path": "android/src/newarch/com/reactnativecommunity/webview/RNCWebViewManager.java",
+      "originalSha256": "4874d08ba8920a4a8fd2c0ced6ad94bdba75f46c51d6328857d2c6eb0ffc359b",
+      "patchedSha256": "034b1aca7455fe47f883181ff45a85bdbbf5eff4c7a906d3120a4381e6d11cc0",
+      "before": "\n    @NonNull\n    @Override\n    public String getName() {",
+      "after": "\n    // TopicTrail policy v1; exported only alongside the denying native listener.\n    @Override\n    public Map<String, Object> getExportedViewConstants() {\n        return MapBuilder.of(\"topicTrailDownloadPolicyVersion\", 1);\n    }\n\n    @NonNull\n    @Override\n    public String getName() {"
+    },
+    {
+      "path": "android/src/oldarch/com/reactnativecommunity/webview/RNCWebViewManager.java",
+      "originalSha256": "d8489437a370e5cd814b40cf6ee55a64d9c83dfeddd934c88edcf88228784d91",
+      "patchedSha256": "e076def69e44c6da0a2a66495a1e2090293d73e204a5b300088da33eee391256",
+      "before": "\n    @Override\n    public String getName() {",
+      "after": "\n    // TopicTrail policy v1; exported only alongside the denying native listener.\n    @Override\n    public Map<String, Object> getExportedViewConstants() {\n        return MapBuilder.of(\"topicTrailDownloadPolicyVersion\", 1);\n    }\n\n    @Override\n    public String getName() {"
+    }
+  ]
+}

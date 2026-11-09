@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="TopicTrail brand mark" clip-path="url(#clip0_0_18)">
+<path id="Logo / Golden tile" d="M58 0H22C9.84974 0 0 9.84974 0 22V58C0 70.1503 9.84974 80 22 80H58C70.1503 80 80 70.1503 80 58V22C80 9.84974 70.1503 0 58 0Z" fill="#FFCC00"/>
+<path id="Logo / Royal trail" d="M16 20H38M38 20H62M38 20V43C38 57 47 62 62 62" stroke-linecap="round" stroke="#003399"/>
+<path id="Logo / Destination" d="M62 70C66.4183 70 70 66.4183 70 62C70 57.5817 66.4183 54 62 54C57.5817 54 54 57.5817 54 62C54 66.4183 57.5817 70 62 70Z" fill="#003399"/>
+<path id="Logo / Waypoint" d="M38 46C40.7614 46 43 43.7614 43 41C43 38.2386 40.7614 36 38 36C35.2386 36 33 38.2386 33 41C33 43.7614 35.2386 46 38 46Z" fill="#003399"/>
+</g>
+<defs>
+<clipPath id="clip0_0_18">
+<rect width="80" height="80" fill="white"/>
+</clipPath>
+</defs>
+</svg>

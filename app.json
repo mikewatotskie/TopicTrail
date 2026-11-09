@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "TopicTrail",
+    "slug": "TopicTrail-ReactNative",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/brand/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.teamjam.topictrail.acceptance",
+      "adaptiveIcon": {
+        "backgroundColor": "#003399",
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/brand/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash.png",
+          "imageWidth": 80,
+          "backgroundColor": "#F7F9FC",
+          "dark": {
+            "image": "./assets/brand/splash-dark.png",
+            "backgroundColor": "#0B1220"
+          }
+        }
+      ],
+      "expo-asset",
+      "expo-image",
+      [
+        "expo-secure-store",
+        { "configureAndroidBackup": false }
+      ]
+    ],
+    "scheme": "topictrail"
+  }
+}

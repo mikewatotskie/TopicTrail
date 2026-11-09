@@ -1,0 +1,46 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="416" height="322" viewBox="0 0 416 322" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Sky cloud / Lower left" opacity="0.65">
+<g id="Sky cloud" opacity="0.45" filter="url(#filter0_f_0_14)">
+<path d="M43.1654 126.71C23.6638 94.6692 56.5087 46.0553 103.723 52.6844C135.542 20.6435 191.994 30.5872 211.495 50.4747C258.71 25.0629 320.294 71.4671 300.792 123.396C330.558 169.8 282.317 219.518 239.208 213.994C204.311 247.14 157.096 220.623 135.542 207.365C81.1423 237.196 37.007 195.212 43.1654 159.856C27.7694 152.122 28.7958 134.444 43.1654 126.71Z" fill="url(#paint0_radial_0_14)"/>
+</g>
+<g id="Royal blue undertone" opacity="0.35" filter="url(#filter1_f_0_14)">
+<path d="M155.66 164.654C139.618 112.728 179.723 89.7842 209.802 103.068C251.912 70.463 295.024 89.7842 310.064 117.558C360.195 88.5766 395.286 148.955 378.242 190.013C400.3 232.278 354.179 280.581 321.092 262.467C286.001 301.11 238.878 266.09 217.822 250.392C173.707 268.505 144.631 217.787 155.66 188.805V164.654Z" fill="url(#paint1_radial_0_14)"/>
+</g>
+<g id="Sky echo" opacity="0.45" filter="url(#filter2_f_0_14)">
+<path d="M133.88 203.403C116.623 176.541 145.688 135.784 187.467 141.341C215.623 114.479 265.577 122.816 282.834 139.489C324.614 118.184 379.109 157.089 361.852 200.625C388.192 239.529 345.504 281.212 307.357 276.581C276.476 304.37 234.697 282.139 215.623 271.023C167.486 296.033 128.431 260.834 133.88 231.192C120.256 224.708 121.165 209.888 133.88 203.403Z" fill="url(#paint2_radial_0_14)" fill-opacity="0.62"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_f_0_14" x="0" y="-8.51881e-07" width="342" height="262" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="16" result="effect1_foregroundBlur_0_14"/>
+</filter>
+<filter id="filter1_f_0_14" x="120" y="54" width="296" height="258" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="16" result="effect1_foregroundBlur_0_14"/>
+</filter>
+<filter id="filter2_f_0_14" x="92" y="92" width="310" height="230" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="16" result="effect1_foregroundBlur_0_14"/>
+</filter>
+<radialGradient id="paint0_radial_0_14" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(171 131) scale(139 99)">
+<stop stop-color="#60B5FF" stop-opacity="0.98"/>
+<stop offset="0.42" stop-color="#60B5FF" stop-opacity="0.82"/>
+<stop offset="0.76" stop-color="#003399" stop-opacity="0.24"/>
+<stop offset="1" stop-color="#60B5FF" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="paint1_radial_0_14" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(268 183) scale(116 97)">
+<stop stop-color="#003399" stop-opacity="0.95"/>
+<stop offset="0.55" stop-color="#003399" stop-opacity="0.45"/>
+<stop offset="1" stop-color="#003399" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="paint2_radial_0_14" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(247 207) scale(123 83)">
+<stop stop-color="#60B5FF" stop-opacity="0.95"/>
+<stop offset="0.55" stop-color="#60B5FF" stop-opacity="0.45"/>
+<stop offset="1" stop-color="#60B5FF" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>
