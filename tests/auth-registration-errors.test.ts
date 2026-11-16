@@ -7,7 +7,7 @@ import { createSupabaseAuthGateway } from '../src/core/auth/supabase_gateway';
 import { reportAuthDiagnostic } from '../src/core/auth/supabase_diagnostics';
 import { AuthOperationError, type AuthGateway } from '../src/core/auth/types';
 import { createAuthFetch } from '../src/core/auth/supabase_fetch';
-import type { AuthRequestEvidence } from '../src/core/auth/supabase_diagnostics';
+import type { AuthOperation, AuthRequestEvidence } from '../src/core/auth/supabase_diagnostics';
 
 test('installed SDK HTTP500/502 errors are server failures, not connectivity failures', () => {
   for (const status of [500, 502]) {
@@ -24,22 +24,47 @@ async function fixture(reply: typeof fetch, run: (f: { gateway: AuthGateway; req
   const original = globalThis.fetch;
   const requests: string[] = [];
   const clients: SupabaseClient[] = [];
+  const cooldowns = new Map<AuthOperation, number>();
   globalThis.fetch = async (input, init) => {
     const path = new URL(String(input)).pathname;
     assert.ok(path.startsWith('/auth/v1/')); requests.push(path);
     return reply(input, init);
   };
   const make = () => {
-    const transport = createAuthTransport(timeoutMs);
+    const transport = createAuthTransport(timeoutMs, cooldowns);
     const client = createClient('https://fixture.example.invalid', 'synthetic-public-key', { global: { fetch: transport.fetch }, auth: {
       storageKey: 'registration-fixture-' + clients.length, persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, debug: false,
     } });
     clients.push(client); return transport.wrap(client.auth);
   };
-  const gateway = createSupabaseAuthGateway({ main: make(), temporary: make, namespace: 'fixture', callbackUrl: () => 'topictrail://auth/callback', command: action => action() });
+  const gateway = createSupabaseAuthGateway({ main: make(), temporary: make, emailCodesReady: true, namespace: 'fixture', command: action => action() });
   try { await run({ gateway, requests }); }
   finally { gateway.dispose(); await Promise.all(clients.map(client => client.auth.dispose())); globalThis.fetch = original; }
 }
+
+test('a reset 429 survives isolated clients, honors Retry-After and leaves manual login available', async () => {
+  const clock = Date.now;
+  let time = clock();
+  Date.now = () => time;
+  try {
+    await fixture(async (input) => {
+      if (new URL(String(input)).pathname.endsWith('/token')) {
+        return new Response(JSON.stringify({ code: 'invalid_credentials' }), { status: 400 });
+      }
+      return new Response('{}', { status: 429, headers: { 'Retry-After': '90' } });
+    }, async ({ gateway, requests }) => {
+      const recover = () => gateway.sendPasswordReset('fixture@example.invalid');
+      await assert.rejects(recover, { code: 'rate_limit' });
+      time += 89_000;
+      await assert.rejects(recover, { code: 'rate_limit' });
+      assert.deepEqual(requests, ['/auth/v1/recover']);
+      await assert.rejects(() => gateway.signIn('fixture@example.invalid', 'fixture'), { code: 'invalid_credentials' });
+      time += 1_000;
+      await assert.rejects(recover, { code: 'rate_limit' });
+      assert.deepEqual(requests, ['/auth/v1/recover', '/auth/v1/token', '/auth/v1/recover']);
+    });
+  } finally { Date.now = clock; }
+});
 
 for (const [status, body, expected, ambiguous] of [
   [400, { code: 'validation_failed' }, 'validation', false],

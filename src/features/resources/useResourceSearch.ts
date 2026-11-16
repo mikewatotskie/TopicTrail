@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resourceDiscovery } from '../../core/services/resources';
 import { SearchSession } from '../../core/services/resources/session';
-import type { SearchSelection, SearchState } from '../../core/services/resources/types';
+import type { ResourceSource, SearchOrigin, SearchState } from '../../core/services/resources/types';
 
 /** Each mounted selection owns its session; effect setup also supports React's development remount. */
-export function useResourceSearch(selection: SearchSelection) {
+export function useResourceSearch(selection: SearchOrigin) {
   const session = useRef<SearchSession | null>(null);
   const [state, setState] = useState<SearchState>({ status: 'idle' });
   useEffect(() => {
@@ -16,7 +16,10 @@ export function useResourceSearch(selection: SearchSelection) {
       if (session.current === current) session.current = null;
     };
   }, []);
-  const search = useCallback((query: string) => { void session.current?.search(selection, query); }, [selection]);
+  const search = useCallback((query: string, source: ResourceSource) => {
+    const origin = selection.kind === 'manual' ? {kind: 'manual' as const, text: query} : selection;
+    void session.current?.search(origin, query, source);
+  }, [selection]);
   const cancel = useCallback(() => session.current?.cancel(), []);
   return { state, search, cancel };
 }

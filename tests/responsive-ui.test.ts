@@ -12,9 +12,10 @@ before(async () => {
   const mocks: Record<string, string> = {
     'react-native': `export * from 'react-native-web';export const viewport={width:1920};export const useWindowDimensions=()=>({width:viewport.width,height:1080,scale:1,fontScale:1});`,
     'react-native-safe-area-context': `export {View as SafeAreaView} from 'react-native-web';export const useSafeAreaInsets=()=>({top:0,bottom:0,left:0,right:0});`,
-    'expo-router': `import {useEffect} from 'react';export const useFocusEffect=cb=>useEffect(cb,[cb]);export const router={push(){},navigate(){},back(){},canGoBack:()=>true};`,
+    'expo-router': `import {useEffect} from 'react';export const useFocusEffect=cb=>useEffect(cb,[cb]);export const useRouter=()=>router;export const router={push(){},navigate(){},back(){},canGoBack:()=>true};`,
     'expo-image': `import React from 'react';export const Image=()=>React.createElement('span');`,
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>React.createElement('span');Ionicons.glyphMap={};`,
+    guestBookmarks: `export const bookmarkStore={initialize:async()=>{},getSnapshot:()=>({bookmarks:[]})};`,
     theme: `import {TTLightColors} from '${tokens}';export const useColors=()=>({colors:TTLightColors});export const useTheme=()=>({colors:TTLightColors,colorScheme:'light'});`,
     storage: `export const DocumentStorage={instance:{getAllDocuments:async()=>[]}};`,
     bookmarks: `export const useBookmarks=()=>({status:'ready',bookmarks:[],retry(){}});export const savedDate=()=>'';export const useBookmarkAction=()=>({});`,
@@ -23,7 +24,7 @@ before(async () => {
   const result = await build({ stdin: { contents: `export {TTScreen} from './src/components/TTScreen';export {TTButton} from './src/components/TTButton';export {TTEmptyState,TTUploadDocumentCard} from './src/components/TTCard';export {HomeScreen} from './src/features/home/HomeScreen';export {SavedScreen} from './src/features/saved/SavedScreen';export {viewport} from 'react-native';`, loader: 'tsx', resolveDir: process.cwd() },
     bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external', loader: { '.svg': 'dataurl' }, plugins: [{ name: 'viewport-io', setup(builder) {
       builder.onResolve({ filter: /.*/ }, args => {
-        const key = /ThemeContext$/.test(args.path) ? 'theme' : /document_storage$/.test(args.path) ? 'storage' : /useBookmarks$/.test(args.path) ? 'bookmarks' : /ResourceDetails$/.test(args.path) ? 'details' : args.path;
+        const key = /bookmarks\/storage$/.test(args.path) ? 'guestBookmarks' : /ThemeContext$/.test(args.path) ? 'theme' : /document_storage$/.test(args.path) ? 'storage' : /useBookmarks$/.test(args.path) ? 'bookmarks' : /ResourceDetails$/.test(args.path) ? 'details' : args.path;
         if (key in mocks) return { path: key, namespace: 'io' };
       });
       builder.onLoad({ filter: /.*/, namespace: 'io' }, args => ({ contents: mocks[args.path], loader: 'tsx', resolveDir: process.cwd() }));
@@ -72,14 +73,17 @@ test('home_actions_are_intrinsic_on_desktop', async () => {
     ui.viewport.width = width;
     await mounted(React.createElement(ui.HomeScreen), doc => {
       // Production cards stretch in their column; action alignment must override that inheritance.
-      const upload = action(doc, 'Upload syllabus'); const saved = action(doc, 'Open saved resources');
-      for (const button of [upload, saved]) {
+      const upload = action(doc, 'Import syllabus'); const saved = action(doc, 'Saved resources');
+      assert.equal(doc.querySelector('[aria-label="Scan a photo"], [aria-label="Take a photo"]'), null);
+      for (const button of [upload, action(doc, 'Search a topic'), action(doc, 'New note')]) {
         assert.equal(doc.defaultView!.getComputedStyle(button.parentElement!).display, 'flex');
         responsive(button, width, 'flex-start');
       }
+      assert.ok(saved.parentElement!.contains(action(doc, 'My Syllabi')));
+      assert.equal(saved.style.minHeight, '88px');
       assert.equal(saved.parentElement!.style.maxWidth, '640px');
-      const heroTitle = [...doc.querySelectorAll<HTMLElement>('*')].find(el => el.childNodes.length === 1 && el.textContent === 'Study from your syllabus')!;
-      assert.equal(heroTitle.style.maxWidth, '640px');
+      const title = [...doc.querySelectorAll<HTMLElement>('[role="heading"]')].find(el => el.textContent === 'Continue reading');
+      assert.ok(title);
     });
   }
 });
@@ -130,7 +134,7 @@ test('saved_search_and_supporting_prose_are_readable', async () => {
   await mounted(React.createElement(ui.SavedScreen), doc => {
     const search = doc.querySelector<HTMLInputElement>('[aria-label="Search saved resources"]')!;
     assert.equal(search.parentElement!.parentElement!.style.maxWidth, '640px');
-    const prose = [...doc.querySelectorAll<HTMLElement>('*')].find(el => el.childNodes.length === 1 && el.textContent?.startsWith('Saved links open online.'))!;
+    const prose = [...doc.querySelectorAll<HTMLElement>('[dir="auto"]')].find(el => el.textContent?.startsWith('Saved links open online.'))!;
     assert.equal(prose.style.maxWidth, '640px'); responsive(action(doc, 'Open My Syllabi'), 1920, 'center');
   });
 });

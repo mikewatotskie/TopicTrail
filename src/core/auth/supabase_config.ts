@@ -1,6 +1,6 @@
 import { AuthOperationError } from './types';
 
-export interface SupabaseConfiguration { url: string; publishableKey: string; namespace: string }
+export interface SupabaseConfiguration { url: string; publishableKey: string; namespace: string; emailCodesReady?: boolean }
 export function validateSupabaseConfiguration(url: unknown, key: unknown): SupabaseConfiguration {
   const invalid = () => new AuthOperationError('unavailable', 'Supabase public configuration is missing or invalid.');
   if (typeof url !== 'string' || typeof key !== 'string') throw invalid();
@@ -14,5 +14,6 @@ export function validateSupabaseConfiguration(url: unknown, key: unknown): Supab
 }
 export function readSupabaseConfiguration(): SupabaseConfiguration {
   // Static dot access is required by Expo's public-variable transform.
-  return validateSupabaseConfiguration(process.env.EXPO_PUBLIC_SUPABASE_URL, process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const config = validateSupabaseConfiguration(process.env.EXPO_PUBLIC_SUPABASE_URL, process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  return { ...config, emailCodesReady: process.env.EXPO_PUBLIC_TOPICTRAIL_EMAIL_CODES_REF === config.namespace };
 }

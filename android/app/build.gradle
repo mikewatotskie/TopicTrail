@@ -3,6 +3,54 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+// Use immutable APK assets. Loading identical Inter files under four aliases through
+// Expo's file cache can truncate a font while Android is reading it on first launch.
+abstract class PrepareTopicTrailFonts extends DefaultTask {
+    @InputFile abstract RegularFileProperty getInterFont()
+    @InputFile abstract RegularFileProperty getIconFont()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+
+    @TaskAction void prepare() {
+        def directory = outputDirectory.dir('fonts').get().asFile
+        directory.mkdirs()
+        java.nio.file.Files.copy(interFont.get().asFile.toPath(), new File(directory, 'Inter.ttf').toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        java.nio.file.Files.copy(iconFont.get().asFile.toPath(), new File(directory, 'ionicons.ttf').toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+androidComponents.onVariants(androidComponents.selector().all()) { variant ->
+    def fonts = tasks.register("prepareTopicTrailFontsFor${variant.name.capitalize()}", PrepareTopicTrailFonts) {
+        interFont.set(new File(projectRoot, 'src/assets/fonts/Inter-Regular.ttf'))
+        iconFont.set(new File(projectRoot, 'node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'))
+    }
+    variant.sources.assets.addGeneratedSourceDirectory(fonts) { task -> task.outputDirectory }
+}
+def pinnedReleaseCertificate = file('release-certificate.sha256').text.trim()
+def previousTemplateCertificate = 'fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c'
+def signingFile = providers.environmentVariable('TOPICTRAIL_SIGNING_FILE').orNull
+def signingPassword = providers.environmentVariable('TOPICTRAIL_SIGNING_PASSWORD').orNull
+def releaseCode = providers.gradleProperty('topicTrailVersionCode').getOrElse('2').toInteger()
+if (releaseCode < 2) throw new GradleException('Release versionCode must be at least 2.')
+
+def validatePrivateSigner = tasks.register('verifyTopicTrailReleaseSigner') {
+    doLast {
+        if (!signingFile || !signingPassword) throw new GradleException('Private TopicTrail signing credentials are required.')
+        def store = java.security.KeyStore.getInstance('PKCS12')
+        new File(signingFile).withInputStream { store.load(it, signingPassword.toCharArray()) }
+        def alias = 'topictrail-release'
+        if (!store.isKeyEntry(alias)) throw new GradleException('Expected a private release signing entry.')
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(store.getCertificate(alias).encoded).encodeHex().toString()
+        if (digest == previousTemplateCertificate || digest != pinnedReleaseCertificate) throw new GradleException('Release signer does not match the private release certificate pin.')
+    }
+}
+tasks.matching { it.name == 'preReleaseBuild' || it.name == 'validateSigningRelease' }.configureEach {
+    dependsOn(validatePrivateSigner)
+}
+
+// React Native excludes node_modules from incremental JS bundle inputs.
+tasks.withType(com.facebook.react.tasks.BundleHermesCTask).configureEach {
+    inputs.files(new File(projectRoot, "package.json"), new File(projectRoot, "package-lock.json"))
+    sources.exclude('.p/**', 'work/**', 'deliverables/**', 'dist*/**')
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -83,22 +131,36 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
+    externalNativeBuild {
+        cmake { path file('src/main/jni/CMakeLists.txt') }
+    }
 
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.teamjam.topictrail.acceptance'
     defaultConfig {
-        applicationId 'com.teamjam.topictrail.acceptance'
+        applicationId 'com.teamjam.topictrail'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode releaseCode
+        versionName "1.1.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
+        production {
+            if (signingFile) storeFile file(signingFile)
+            storePassword signingPassword
+            keyAlias 'topictrail-release'
+            keyPassword signingPassword
+            storeType 'PKCS12'
+        }
         debug {
+            // Keep existing developer installs upgradable when the legacy key is present.
+            if (file('debug.keystore').isFile()) storeFile file('debug.keystore')
+        }
+        legacyMigration {
             storeFile file('debug.keystore')
             storePassword 'android'
             keyAlias 'androiddebugkey'
@@ -107,18 +169,25 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix '.acceptance'
+            manifestPlaceholders.topictrailDebugScheme = 'topictrail'
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.production
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             def enablePngCrunchInRelease = findProperty('android.enablePngCrunchInReleaseBuilds') ?: 'true'
             crunchPngs enablePngCrunchInRelease.toBoolean()
+        }
+        migration {
+            initWith release
+            applicationIdSuffix '.acceptance'
+            versionNameSuffix '-transfer'
+            matchingFallbacks = ['release']
+            signingConfig signingConfigs.legacyMigration
         }
     }
     packagingOptions {
@@ -153,8 +222,22 @@ android {
 }
 
 dependencies {
+    constraints {
+        implementation('commons-io:commons-io:2.16.1') {
+            because 'Use a patched Commons IO for Expo document and file APIs.'
+        }
+        implementation('com.google.code.gson:gson:2.8.9') {
+            because 'Use patched Gson when it is pulled in by the Expo log box.'
+        }
+        implementation('com.google.guava:guava:33.7.2-android') {
+            because 'Keep transitive Guava on its patched Android runtime.'
+        }
+    }
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("androidx.exifinterface:exifinterface:1.4.1")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

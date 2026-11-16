@@ -1,14 +1,21 @@
 export interface SearchSelection { documentId: string; text: string; page: number }
+export type ResourceSource = 'wikipedia' | 'duckduckgo';
+export type SearchOrigin = ({ kind: 'document' } & SearchSelection) | { kind: 'manual'; text: string };
+/** Older reader call sites supply a selection; normalize it at the search boundary. */
+export function searchOrigin(value: SearchOrigin | SearchSelection): SearchOrigin {
+  return 'kind' in value ? value : { kind: 'document', ...value };
+}
 export interface QueryPlan { query: string; originalText: string; shortened: boolean }
 export interface Attribution {
   author: string; licenseName: string; licenseUrl: string; sourceUrl: string; revisionUrl?: string;
 }
 export interface ResourceCandidate {
   id: string; title: string; providerId: string; providerName: string; description?: string;
-  url: string; type: 'Article'; attribution: Attribution; providerOrder: number;
+  url: string; type: 'Article' | 'Instant Answer'; attribution?: Attribution; providerOrder: number;
 }
 export interface EducationalResource extends ResourceCandidate {
-  selectedTopic: string; documentId: string; page: number;
+  origin?: SearchOrigin;
+  selectedTopic?: string; documentId?: string; page?: number;
 }
 export interface ProviderResult { resources: ResourceCandidate[]; discarded: number }
 export interface ResourceProvider {
@@ -25,7 +32,7 @@ export class DiscoveryError extends Error {
   }
 }
 export interface DiscoveryService {
-  search(selection: SearchSelection, queryOverride?: string, signal?: AbortSignal): Promise<DiscoveryResult>;
+  search(selection: SearchOrigin | SearchSelection, queryOverride?: string, signal?: AbortSignal, source?: ResourceSource): Promise<DiscoveryResult>;
 }
 export type SearchState = { status: 'idle' }
   | { status: 'loading'; query: QueryPlan }

@@ -66,7 +66,7 @@ test('web picker cancellation keeps previous readable selection', async () => {
 });
 test('web oversized selection is rejected before reading', async () => {
   class LargeFile extends File { override get size() { return 50 * 1024 * 1024 + 1; } override slice(): Blob { throw Error('Must not read oversize file'); } }
-  const h = harness(new LargeFile(['tiny'], 'Large.pdf')); await assert.rejects(h.service.pickDocument(), /50\s?MB/);
+  const h = harness(new LargeFile(['tiny'], 'Large.pdf')); await assert.rejects(h.service.pickDocument(), /50\s?MiB/);
 });
 test('invalid web document does not enter the library', async () => {
   const h = harness(new File(['not a pdf'], 'Fake.pdf')); const selected = await h.service.pickDocument(); assert.ok(selected);

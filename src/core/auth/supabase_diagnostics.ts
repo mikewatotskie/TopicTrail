@@ -3,6 +3,7 @@ import type { AuthErrorCode } from './types';
 export type AuthOperation = 'signup' | 'login' | 'recovery_request' | 'resend_confirmation' | 'verify_email' | 'password_update' | 'logout';
 export interface AuthRequestEvidence {
   httpStatus?: number;
+  retryAt?: number;
   supabaseCode?: string;
   requestId?: string;
   failure?: 'network' | 'timeout' | 'cancelled' | 'invalid_response';

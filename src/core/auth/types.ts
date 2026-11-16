@@ -25,15 +25,20 @@ export interface AuthGateway {
   sendPasswordReset(email: string): Promise<void>;
   signOut(): Promise<void>;
   verification?: AuthVerificationGateway;
+  /** False when the deployed provider has not enabled and verified code-only mail delivery. */
+  emailCodesReady?: boolean;
+  /** Recent password sign-in on this client, bound to the current account and epoch. */
+  hasFreshTransferSignIn?(): boolean;
   /** Changes on identity/availability transitions; refresh of the same identity retains its epoch. */
   getSessionEpoch?(): number;
+  /** In-memory file-transfer capability; never persist or expose this token in UI/logs. */
+  getCloudSession?(): Promise<{ project: string; uid: string; accessToken: string } | null>;
   dispose(): void;
 }
 export interface AuthVerificationGateway {
   verifyEmail(email: string, code: string): Promise<void>;
   resendConfirmation(email: string): Promise<void>;
   beginRecovery(email: string, code: string): Promise<void>;
-  verifyLink(tokenHash: string, purpose: 'signup' | 'recovery'): Promise<void>;
   hasRecoverySession(): boolean;
   recoveryEmail(): string | null;
   completeRecovery(password: string): Promise<void>;

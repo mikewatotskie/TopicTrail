@@ -764,8 +764,62 @@
     "wasm-LICENSE_PDFJS_OPENJPEG.txt",
     "wasm-LICENSE_PDFJS_QCMS.txt",
     "wasm-LICENSE_QCMS.txt",
-    "iccs-LICENSE.txt"
+    "iccs-LICENSE.txt",
+    "FILIPINO-TRAINEDDATA-NOTICE.txt",
+    "TESSERACT-JS-LICENSE.txt",
+    "TESSERACT-WORKER-NOTICES.txt",
+    "TESSERACT-CORE-LICENSE.txt",
+    "ENGLISH-TRAINEDDATA-NOTICE.txt"
   ],
   "delivery": "All resources and decoder JavaScript are embedded in viewer.html; no network or local-file fetch.",
-  "adapter": "Worker binary/synchronous reads use literal allowlisted bytes; JPEG2000/JBIG2 fallback imports are bundled inline."
+  "adapter": "Worker binary/synchronous reads use literal allowlisted bytes; JPEG2000/JBIG2 fallback imports are bundled inline.",
+  "ocr": {
+    "tesseractVersion": "7.0.0",
+    "coreVersion": "7.0.0",
+    "englishPackageVersion": "1.0.0",
+    "resources": {
+      "worker": {
+        "bytes": 111307,
+        "sha256": "576b7df7e3393e137e51849357c9adb53fe7ac1bb69bfa06cf3d61520f182c6d"
+      },
+      "core": {
+        "bytes": 89261,
+        "sha256": "6510efc4e8b45c5465df30679b9911ffe0071cd2ee982fa064e6f5136ef2de85"
+      },
+      "wasm": {
+        "bytes": 2855361,
+        "sha256": "66b17df6e20c5329a17ffa9c202a47eaa3e32500b253d4c7f38e7f2bc01457c3"
+      },
+      "english": {
+        "bytes": 2952873,
+        "sha256": "45b4cb346724ac1774f1c36f42f182b887bcdb28ebe63e6fff90ac41f3fcff91"
+      },
+      "filipino": {
+        "bytes": 1841715,
+        "sha256": "2b17f68014ab44b88b5e2334ebcd0ce0090d9af7c6fbef6fab22e0bbd9a934dd"
+      }
+    },
+    "boundedWasm": {
+      "bytes": 2855360,
+      "sha256": "e1a83264626479d60cf638df24c9793df33a4009bf6a59bd09431ff16181ac8f",
+      "maximumBytes": 268435456
+    },
+    "worker": {
+      "bytes": 10450169,
+      "sha256": "94efb2ac9678b9dfb13352559154341f8f685f335b8dfa787d0576a656a9b275"
+    },
+    "limits": {
+      "pixels": 4000000,
+      "dimension": 8192,
+      "pngBytes": 16777216,
+      "oneJob": true,
+      "jobTimeoutMs": 120000
+    },
+    "languages": [
+      "eng",
+      "fil"
+    ],
+    "delivery": "Core, worker, WASM and both models embedded. Worker fetch/XHR/importScripts/WebSocket/EventSource denied; no runtime network or persistent model cache.",
+    "adapter": "Hash-pinned non-SIMD LSTM core with a 256MiB WASM memory maximum. Both language models are supplied through the upstream byte-data API; v7 detects per-model gzip magic. Standalone worker carries license notices."
+  }
 }

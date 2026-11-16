@@ -1,4 +1,5 @@
 import { safeHttpStatus, safeRequestId, safeSupabaseCode, type AuthRequestEvidence } from './supabase_diagnostics';
+import { retryAfterDeadline } from '../services/cloud/sync_retry';
 
 /** Only fixed provider phrases identify mail submission; arbitrary SMTP text is never surfaced. */
 function emailSubmissionFailure(body: Record<string, unknown>) {
@@ -22,6 +23,7 @@ export function createAuthFetch(observe?: (input: RequestInfo | URL, init: Reque
       const response = await fetch(input, { ...init, signal: controller.signal });
       evidence = { httpStatus: safeHttpStatus(response.status),
         requestId: safeRequestId(response.headers.get('sb-request-id')) ?? safeRequestId(response.headers.get('x-request-id')) };
+      if (response.status === 429) evidence.retryAt = retryAfterDeadline(response.headers.get('retry-after')) ?? undefined;
       emit();
       if (response.status === 204) return response;
       let body: unknown;

@@ -1,3 +1,3 @@
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
-module.exports = defineConfig([expoConfig, { ignores: ['assets/reader/**', 'node_modules/**'] }]);
+module.exports = defineConfig([expoConfig, { ignores: ['assets/reader/**', 'node_modules/**', 'work/**', '.agents/**', '.p/**', 'dist*/**', 'deliverables/**'] }]);

@@ -1,5 +1,6 @@
 {
   "extends": "expo/tsconfig.base",
+  "exclude": ["node_modules", "work", ".agents"],
   "compilerOptions": {
     "strict": true
   }

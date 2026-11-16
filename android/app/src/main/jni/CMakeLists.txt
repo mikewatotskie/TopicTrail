@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.13)
+project(appmodules)
+include(${REACT_ANDROID_DIR}/cmake-utils/ReactNative-application.cmake)
+add_library(topictrail_transfer SHARED atomic/publish.c)
+target_link_options(topictrail_transfer PRIVATE "-Wl,-z,max-page-size=16384")

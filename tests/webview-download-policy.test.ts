@@ -45,10 +45,10 @@ function snapshot(root: string): Record<string,string> {
   visit(root); return result;
 }
 
-test('exact upstream fixture applies only the three policy files and is idempotent', async () => fixture((root, patcher, manifest) => {
+test('exact upstream fixture applies only the declared policy files and is idempotent', async () => fixture((root, patcher, manifest) => {
   const before = snapshot(root);
   const result = patcher.applyWebViewDownloadPolicy(root);
-  assert.equal(result.changed.length, 3); assert.deepEqual(result.changed, manifest.files.map(file => file.path));
+  assert.equal(result.changed.length, manifest.files.length); assert.deepEqual(result.changed, manifest.files.map(file => file.path));
   const after = snapshot(root);
   const changed = Object.keys(before).filter(path => before[path] !== after[path]).sort();
   assert.deepEqual(changed, manifest.files.map(file => file.path.replaceAll('/', sep)).sort());
@@ -72,7 +72,7 @@ for (const version of ['14.0.0','14.0.2','15.0.0']) test(`unknown WebView ${vers
   assert.deepEqual(snapshot(root), before);
 }));
 
-for (const index of [0,1,2]) test(`an unknown edit in target ${index + 1} aborts before every mutation`, async () => fixture((root, patcher, manifest) => {
+for (const index of [0,1,2,3]) test(`an unknown edit in target ${index + 1} aborts before every mutation`, async () => fixture((root, patcher, manifest) => {
   const target = join(root, manifest.files[index].path); writeFileSync(target, readFileSync(target, 'utf8') + '\n// unknown edit\n');
   const before = snapshot(root); assert.throws(() => patcher.applyWebViewDownloadPolicy(root), /unknown.*source|hash/i);
   assert.deepEqual(snapshot(root), before);
@@ -87,7 +87,7 @@ for (const patchedIndices of [[0],[1],[0,1]]) test(`known mixed state ${patchedI
   }
   const before = snapshot(root); assert.throws(() => patcher.applyWebViewDownloadPolicy(root, {check:true}), /not fully patched/i);
   assert.deepEqual(snapshot(root), before);
-  assert.equal(patcher.applyWebViewDownloadPolicy(root).changed.length, 3 - patchedIndices.length);
+  assert.equal(patcher.applyWebViewDownloadPolicy(root).changed.length, manifest.files.length - patchedIndices.length);
   patcher.applyWebViewDownloadPolicy(root, {check:true});
 }));
 
@@ -98,12 +98,12 @@ test('denial is written before capability exports and no download request surviv
   const listener = implementation.slice(implementation.indexOf('webView.setDownloadListener('), implementation.indexOf('return RNCWebViewWrapper(context, webView)'));
   assert.match(listener, /stopLoading\(\)/); assert.match(listener, /getRNCWebViewClient\(\)\?\.onReceivedError\(/);
   assert.match(listener, /-9001/); assert.doesNotMatch(listener, /DownloadManager\.Request|setDownloadRequest|downloadFile|DIRECTORY_DOWNLOADS/);
-  for (const file of manifest.files.slice(1)) assert.match(readFileSync(join(root, file.path), 'utf8'), /getExportedViewConstants\(\)[\s\S]*MapBuilder\.of\("topicTrailDownloadPolicyVersion", 1\)/);
+  for (const file of manifest.files.slice(1,3)) assert.match(readFileSync(join(root, file.path), 'utf8'), /getExportedViewConstants\(\)[\s\S]*MapBuilder\.of\("topicTrailDownloadPolicyVersion", 1\)/);
 }));
 
 test('LF-normalized upstream hashes accept CRLF source fixtures', async () => fixture((root, patcher, manifest) => {
   for (const file of manifest.files) { const target = join(root, file.path); writeFileSync(target, readFileSync(target, 'utf8').replaceAll('\n','\r\n')); }
-  assert.equal(patcher.applyWebViewDownloadPolicy(root).changed.length, 3); patcher.applyWebViewDownloadPolicy(root, {check:true});
+  assert.equal(patcher.applyWebViewDownloadPolicy(root).changed.length, manifest.files.length); patcher.applyWebViewDownloadPolicy(root, {check:true});
 }));
 
 test('installed package check passes read-only and CLI rejects arbitrary target arguments', async () => {
@@ -112,4 +112,24 @@ test('installed package check passes read-only and CLI rejects arbitrary target 
   assert.equal(checked.status, 0, checked.stderr); assert.match(checked.stdout, /verified/i);
   const rejected = spawnSync(process.execPath, [script, resolve('tests')], {cwd:resolve('.'),encoding:'utf8'});
   assert.notEqual(rejected.status, 0); assert.match(rejected.stderr, /usage/i);
+});
+
+test('installed reader stream is limited to marked main-frame GETs for the two packaged resources', () => {
+  const source = readFileSync('node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java', 'utf8');
+  const start = source.indexOf('public android.webkit.WebResourceResponse shouldInterceptRequest');
+  const end = source.indexOf('public void onPageFinished', start);
+  assert.ok(start >= 0 && end > start);
+  const method = source.slice(start, end);
+  assert.match(method, /"appassets\.androidplatform\.net"\.equalsIgnoreCase\(uri\.getHost\(\)\)/);
+  assert.match(method, /"X-TopicTrail-Reader"\.equalsIgnoreCase\(header\.getKey\(\)\) && "1"\.equals\(header\.getValue\(\)\)/);
+  assert.match(method, /readerRequest && request\.isForMainFrame\(\) && "GET"\.equals\(request\.getMethod\(\)\)/);
+  for (const [file,name] of [['pdf','assets_reader_viewer'],['office','assets_reader_officeviewer']]) {
+    assert.ok(method.includes('"https://appassets.androidplatform.net/topictrail/reader/' + file + '.html".equals(uri.toString())'));
+    assert.ok(method.includes('name = "' + name + '"'));
+  }
+  assert.match(method, /openRawResource\(id\)/);
+  assert.match(method, /404, "Not Found"/);
+  assert.equal(method.match(/super\.shouldInterceptRequest/g)?.length, 1);
+  assert.ok(method.indexOf('super.shouldInterceptRequest') < method.indexOf('boolean readerRequest'));
+  assert.doesNotMatch(method, /openConnection|FileInputStream/);
 });

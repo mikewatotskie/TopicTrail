@@ -50,7 +50,9 @@ yarn-error.*
 /work/
 /deliverables/
 /dist-presentation/
+/dist-cloud-sync/
 /.p/
+/.r/
 /.claude/
 /.opencode/
 /opencode.json
@@ -60,4 +62,19 @@ yarn-error.*
 !.env.example
 *.apk
 *.aab
+*.ttstudy
 *.log
+
+# Local tools, verification records and credentials
+/.agents/
+/.ocr12/
+/output/
+/docs/acceptance/
+/docs/history/
+/docs/superpowers/
+/docs/guidance/
+/android/key.properties
+/android/keystore.properties
+/credentials.json
+/google-services.json
+/android/app/google-services.json

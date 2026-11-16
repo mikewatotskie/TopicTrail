@@ -2,7 +2,7 @@
   "expo": {
     "name": "TopicTrail",
     "slug": "TopicTrail-ReactNative",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon.png",
     "userInterfaceStyle": "automatic",
@@ -10,7 +10,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.teamjam.topictrail.acceptance",
+      "package": "com.teamjam.topictrail",
       "adaptiveIcon": {
         "backgroundColor": "#003399",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",

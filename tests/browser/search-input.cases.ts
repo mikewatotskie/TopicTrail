@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom';
 import { TTSearchInput } from '../../src/components/TTInput';
 
 // Real browser geometry + behavior for the shared input; no DOM style-mirroring assertion.
-const labels = ['Search documents', 'Search saved resources', 'Wikipedia topic query'];
+const labels = ['Search documents', 'Search saved resources', 'Topic query'];
 let root: Root | undefined;
 function Harness() {
   const [values, setValues] = useState(['', '', '']);

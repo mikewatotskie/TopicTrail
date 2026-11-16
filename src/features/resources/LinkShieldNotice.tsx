@@ -14,18 +14,21 @@ export function assessmentLabel(assessment: LinkAssessment) {
 export function LinkShieldNotice({ url }: { url: string }) {
   const { colors } = useColors();
   const assessment = evaluateUrl(url);
-  return <TTCard testID="link-shield" style={{ gap: 8 }}>
-    <Text accessibilityRole="header" style={[TTTypography.section, { color: colors.ink }]}>Source checks · Link Shield</Text>
+  return <TTCard testID="link-shield" padding={12} style={{ gap: 8 }}>
+    <Text accessibilityRole="header" style={[TTTypography.section, { color: colors.ink }]}>Source checks</Text>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.warningSoft }}>
       <ResourceSymbol name="shield" /><Text style={[TTTypography.caption, { color: colors.warning, flexShrink: 1 }]}>{assessmentLabel(assessment)}</Text>
     </View>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      <Text style={[TTTypography.small, { color: colors.muted }]}>Connection</Text>
+      <Text style={[TTTypography.small, { color: colors.muted, minWidth: 104 }]}>Connection</Text>
       <Text style={[TTTypography.small, { color: colors.ink }]}>{assessment.connection === 'https' ? 'HTTPS URL' : 'Unsupported or unknown'}</Text>
     </View>
-    <Text style={[TTTypography.small, { color: colors.ink }]}>Source: {assessment.sourceName ?? assessment.hostname ?? 'Unknown'}</Text>
-    {[...assessment.reasons, ...assessment.warnings].map((reason, index) => <Text key={index} style={[TTTypography.small, { color: colors.muted }]}>{reason}</Text>)}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Text style={[TTTypography.small, { color: colors.muted, minWidth: 104 }]}>Source</Text>
+      <Text style={[TTTypography.small, { color: colors.ink, flexShrink: 1 }]}>{assessment.sourceName ?? assessment.hostname ?? 'Unknown'}</Text>
+    </View>
+    {assessment.status !== 'recognized' && assessment.reasons.map(reason => <Text key={reason} style={[TTTypography.small, { color: colors.muted }]}>{reason}</Text>)}
     <Text style={[TTTypography.small, { color: colors.warning }]}>Reputation not checked</Text>
-    <Text style={[TTTypography.caption, { color: colors.muted }]}>URL and configured-source checks do not guarantee safety or accuracy. Website content, DNS changes and third-party requests are not inspected.</Text>
+    {assessment.warnings.map(reason => <Text key={reason} style={[TTTypography.caption, { color: colors.muted }]}>{reason}</Text>)}
   </TTCard>;
 }

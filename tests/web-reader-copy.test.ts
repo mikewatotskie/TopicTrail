@@ -15,7 +15,8 @@ const old = new Map<string, PropertyDescriptor | undefined>();
 const io = {
   document: new Syllabus('fixture', 'Fictional syllabus', DocumentFormat.PDF, 'fixture-path', new Date()),
   emit: (_message: ReaderMessage) => {},
-  writes: [] as string[], study: [] as { text: string }[], legacyCalls: 0,
+  writes: [] as string[], study: [] as { documentId: string; text: string; page: number }[], legacyCalls: 0,
+  handoff: [] as string[],
   write: async (_value: string): Promise<void> => {},
 };
 before(async () => {
@@ -29,7 +30,8 @@ before(async () => {
   }
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (value: string) => { io.writes.push(value); return io.write(value); } } });
   const boundaries: Record<string, string> = {
-    'expo-router': `export const router={push(){},canGoBack:()=>false,replace(){}};export const useLocalSearchParams=()=>({documentId:'fixture'});`,
+    'expo-router': `import {useEffect} from 'react';export function useFocusEffect(effect){useEffect(effect,[effect]);}
+      export const useRouter=()=>router;export const router={push(path){io.handoff.push(path)},canGoBack:()=>false,replace(){}};export const useLocalSearchParams=()=>({documentId:'fixture'});`,
     'expo-asset': `export const Asset={fromModule:()=>({uri:'https://reader.test/fixture-html'})};`,
     'expo-clipboard': `export const setStringAsync=async()=>{io.legacyCalls++;return false};`,
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>null;Ionicons.glyphMap={};`,
@@ -38,9 +40,9 @@ before(async () => {
     storage: `export const DocumentStorage={instance:{getDocument:async()=>io.document,updateLastOpened:async()=>{}}};`,
     content: `export const readDocumentBytes=async()=>new Uint8Array(10);`,
     docx: `export const DocxTextExtraction={instance:{extractParagraphs:async()=>['fixture']}};`,
-    study: `export const useStudySelection=()=>({setSelection:value=>io.study.push(value)});`,
+    study: `export const useStudySelection=()=>({setSelection:value=>{io.study.push(value);io.handoff.push('snapshot')}});`,
     theme: `import {TTLightColors} from './src/core/design/tokens';export const useTheme=()=>({colors:TTLightColors,colorScheme:'light'});export const useColors=useTheme;`,
-    frame: `import React,{useEffect} from 'react';export function ReaderFrame(p){useEffect(()=>{io.emit=p.onMessage;p.onConnect({theme(){},dispose(){},load(){},page(){},zoom(){},selectAll(){},clearSelection(){}})},[]);return <div data-testid="fixture-reader"/>}`,
+    frame: `import React,{useEffect} from 'react';export function ReaderFrame(p){useEffect(()=>{io.emit=p.onMessage;p.onConnect({theme(){},dispose(){},load(){},page(){},zoom(){},selectAll(){},clearSelection(){io.handoff.push('clear')},setAnnotations(){},revealAnnotation(){},markArea(){},cancelArea(){},recognize(){},cancelOcr(){},showOcr(){}})},[]);return <div data-testid="fixture-reader"/>}`,
   };
   const output = await build({ stdin: { contents: `export {ReaderScreen} from './src/features/reader/ReaderScreen.web';`, loader: 'tsx', resolveDir: process.cwd() },
     write: false, bundle: true, format: 'cjs', platform: 'node', packages: 'external', alias: { 'react-native': 'react-native-web' }, loader: { '.svg': 'dataurl', '.html': 'text' },
@@ -60,7 +62,7 @@ before(async () => {
 after(() => { dom?.window.close(); for (const [key, value] of old) { if (value) Object.defineProperty(globalThis, key, value); else Reflect.deleteProperty(globalThis, key); } });
 async function mounted(run: () => Promise<void>) {
   const { createRoot } = await import('react-dom/client'), root = createRoot(dom.window.document.querySelector('main')!);
-  io.writes = []; io.study = []; io.legacyCalls = 0;
+  io.writes = []; io.study = []; io.handoff = []; io.legacyCalls = 0;
   try {
     await act(async () => root.render(React.createElement(Reader)));
     await act(async () => { io.emit({ type: 'page', page: 1, totalPages: 1, hasText: true }); io.emit({ type: 'selection', text: '  Fictional loops 日本語\nexact  ', page: 1 }); });
@@ -87,9 +89,24 @@ test('web Reader reports rejected clipboard write, retains selection and can exp
     await act(async () => button('Copy').click());
     assert.ok(dom.window.document.body.textContent?.includes('Clipboard access was denied.'));
     assert.equal(dom.window.document.body.textContent?.includes('Selected text copied.'), false);
-    await act(async () => button('Study').click()); assert.equal(io.study[0].text, '  Fictional loops 日本語\nexact  ');
     io.write = async () => {}; await act(async () => button('Copy').click());
     assert.ok(dom.window.document.body.textContent?.includes('Selected text copied.')); assert.equal(io.legacyCalls, 0);
+    await act(async () => button('Study').click()); assert.equal(io.study[0].text, '  Fictional loops 日本語\nexact  ');
+  });
+});
+test('Study preserves the selected passage and page, dismisses the Reader menu, then opens the topic review', async () => {
+  await mounted(async () => {
+    await act(async () => {
+      io.emit({ type: 'page', page: 8, totalPages: 8, hasText: true });
+      io.emit({ type: 'selection', text: 'approval', page: 8 });
+    });
+    await act(async () => button('Study').click());
+    assert.deepEqual(io.study, [{ documentId: 'fixture', text: 'approval', page: 8 }]);
+    assert.deepEqual(io.handoff, ['snapshot', 'clear', '/topic-preview']);
+    assert.equal(dom.window.document.querySelector('[aria-label="Text selection actions"]'), null);
+    await act(async () => io.emit({ type: 'selection', text: 'another topic', page: 8 }));
+    assert.ok(button('Copy'));
+    assert.ok(button('Select All'));
   });
 });
 test('web Reader missing clipboard API fails honestly without legacy execCommand fallback', async () => {

@@ -8,8 +8,8 @@ type ProgressIO = {
   setItem(key: string, value: string): Promise<void>;
 };
 
-function progressKey({ id, format }: ProgressDocument): string {
-  if (!id || (format !== DocumentFormat.PDF && format !== DocumentFormat.DOCX)) {
+export function progressKey({ id, format }: ProgressDocument): string {
+  if (!id || (format !== DocumentFormat.PDF && format !== DocumentFormat.DOCX && format !== DocumentFormat.PPTX)) {
     throw new Error('Invalid reading progress document');
   }
   return '@topictrail/reading-progress/v1/' + format + '/' + id;
@@ -77,7 +77,7 @@ export class ReadingProgressSession {
   private resumePage: number | undefined;
   private writable = false;
 
-  constructor(private readonly store: ReadingProgressStore, private readonly document: ProgressDocument) {}
+  constructor(private readonly store: Pick<ReadingProgressStore,'read'|'save'>, private readonly document: ProgressDocument) {}
 
   async hydrate(): Promise<void> {
     try {
@@ -102,7 +102,7 @@ export class ReadingProgressSession {
     this.resumePage = undefined;
 
     return this.writable
-      ? { type: 'rendered', saved: this.store.save(this.document, position) }
+      ? { type: 'rendered', saved: this.store.save(this.document, {page:position.page,totalPages:position.totalPages}) }
       : { type: 'rendered' };
   }
 }

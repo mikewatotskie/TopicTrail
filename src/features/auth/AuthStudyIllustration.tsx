@@ -20,7 +20,7 @@ export function AuthStudyIllustration(): React.JSX.Element {
         <Text style={[TTTypography.section, { color: colors.ink, marginTop: 12, marginBottom: 20 }]}>Programming basics</Text>
         {['Variables', 'Loops & iteration', 'Functions'].map((topic, index) => <View key={topic}
           style={{ padding: 12, borderRadius: 8, marginBottom: index === 2 ? 0 : 8,
-            backgroundColor: index === 1 ? colors.accent : colors.canvas }}>
+            backgroundColor: index === 1 ? colors.accent : colors.authCanvas }}>
           <Text style={[TTTypography.small, { color: index === 1 ? colors.onAccent : colors.muted }]}>{topic}</Text>
         </View>)}
         <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 8,

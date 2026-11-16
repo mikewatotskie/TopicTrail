@@ -67,7 +67,7 @@ interface HeadlessUI {
   default: React.ComponentType;
   Screen: React.ComponentType;
   platform: { OS: string };
-  config: { expoConfig: { android: { package: string } } };
+  config: { packageName: string };
   native: { value: unknown; throws: boolean; calls: string[] };
   web: { props: WebViewProps | null; mounted: number; stops: number; backs: number };
 }
@@ -85,17 +85,16 @@ before(async () => {
   }
   const tokens = resolve('src/core/design/tokens.ts').replaceAll('\\', '/');
   const boundaries: Record<string, string> = {
-    'react-native': `export * from 'react-native-web';export const native={value:null,throws:false,calls:[]};export const UIManager={getViewManagerConfig(name){native.calls.push(name);if(native.throws)throw Error('native lookup unavailable');return native.value}};`,
+    'react-native': `export * from 'react-native-web';export const NativeModules={TopicTrailTransfer:{packageName:'com.teamjam.topictrail.acceptance'}};export const native={value:null,throws:false,calls:[]};export const UIManager={getViewManagerConfig(name){native.calls.push(name);if(native.throws)throw Error('native lookup unavailable');return native.value}};`,
     'react-native-webview': `import React from 'react';export const web={props:null,mounted:0,stops:0,backs:0};export const WebView=React.forwardRef((props,ref)=>{web.props=props;React.useImperativeHandle(ref,()=>({stopLoading(){web.stops++},goBack(){web.backs++}}));React.useEffect(()=>{web.mounted++;return()=>{web.mounted--}},[]);return React.createElement('div',{'data-testid':props.testID})});`,
-    'expo-constants': `export default {expoConfig:{android:{package:'com.teamjam.topictrail.acceptance'}}};`,
     'expo-linking': `export async function openURL(){throw Error('No external launch is authorized by a headless acceptance test')};`,
-    'expo-router': `import React from 'react';export const router={canGoBack:()=>false,back(){},replace(){}};export const Redirect=()=>null;`,
+    'expo-router': `import React from 'react';export const useRouter=()=>router;export const router={canGoBack:()=>false,back(){},replace(){}};export const Redirect=()=>null;`,
     'react-native-safe-area-context': `export {View as SafeAreaView} from 'react-native-web';`,
     'expo-image': `import React from 'react';export const Image=()=>React.createElement('span');`,
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>React.createElement('span');Ionicons.glyphMap={};`,
     theme: `import {TTLightColors} from '${tokens}';export const useColors=()=>({colors:TTLightColors});export const useTheme=()=>({colors:TTLightColors,colorScheme:'light'});`,
   };
-  const compiled = await build({ stdin: { contents: `export {default} from './src/app/acceptance';export {AcceptanceScreen as Screen} from './src/features/acceptance/AcceptanceScreen';export {native} from 'react-native';import {Platform} from 'react-native';export const platform=Platform;export {default as config} from 'expo-constants';export {web} from 'react-native-webview';`, loader: 'tsx', resolveDir: process.cwd() },
+  const compiled = await build({ stdin: { contents: `export {default} from './src/app/acceptance';export {AcceptanceScreen as Screen} from './src/features/acceptance/AcceptanceScreen';export {native} from 'react-native';import {Platform} from 'react-native';export const platform=Platform;import {NativeModules} from 'react-native';export const config=NativeModules.TopicTrailTransfer;export {web} from 'react-native-webview';`, loader: 'tsx', resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external', loader: { '.svg': 'dataurl' },
     define: { __DEV__: 'globalThis.__ACCEPTANCE_TEST_DEV__' },
     plugins: [{ name: 'headless-platform-boundaries', setup(builder) {
@@ -115,7 +114,7 @@ after(() => { dom?.window.close(); for (const [key, descriptor] of originals) {
 
 async function mounted(run: (doc: globalThis.Document) => Promise<void>, prepare?: () => void, directScreen = false) {
   Reflect.set(globalThis, '__ACCEPTANCE_TEST_DEV__', true);
-  ui.platform.OS = 'android'; ui.config.expoConfig.android.package = 'com.teamjam.topictrail.acceptance';
+  ui.platform.OS = 'android'; ui.config.packageName = 'com.teamjam.topictrail.acceptance';
   ui.native.value = { Constants: { topicTrailDownloadPolicyVersion: 1, nativeDiagnostic: 73 } };
   ui.native.throws = false; ui.native.calls.length = 0;
   ui.web.props = null; ui.web.mounted = 0; ui.web.stops = 0; ui.web.backs = 0;
@@ -148,7 +147,7 @@ for (const label of ['Open fixture /page/one', 'Production browser: Wikipedia Ph
 
 test('headless actual acceptance route is unavailable in release or a normal production package', async () => {
   for (const prepare of [() => Reflect.set(globalThis, '__ACCEPTANCE_TEST_DEV__', false),
-    () => { ui.config.expoConfig.android.package = 'com.teamjam.topictrail'; }])
+    () => { ui.config.packageName = 'com.teamjam.topictrail'; }])
     await mounted(async doc => {
       assert.equal(doc.querySelector('[aria-label="Open fixture /page/one"]'), null);
       assert.equal(ui.web.mounted, 0); assert.deepEqual(ui.native.calls, []);
@@ -159,7 +158,7 @@ test('headless direct screen hides all native diagnostics and emits no diagnosti
   const logging = context.mock.method(console, 'info', () => {});
   try {
     for (const prepare of [() => Reflect.set(globalThis, '__ACCEPTANCE_TEST_DEV__', false),
-      () => { ui.config.expoConfig.android.package = 'com.teamjam.topictrail'; },
+      () => { ui.config.packageName = 'com.teamjam.topictrail'; },
       () => { ui.platform.OS = 'ios'; }])
       await mounted(async doc => {
         assert.match(doc.body.textContent!, /Acceptance unavailable/);

@@ -55,8 +55,8 @@ test('real MediaWiki-shaped data becomes attributed resource objects with actual
   assert.equal(parsed.discarded, 0); assert.equal(parsed.resources[0].title, 'Variables and loops');
   assert.equal(parsed.resources[0].url, 'https://en.wikipedia.org/wiki/Variables_and_loops');
   assert.equal(parsed.resources[0].description, 'An actual provider excerpt.');
-  assert.equal(parsed.resources[0].attribution.author, 'Wikipedia contributors');
-  assert.equal(parsed.resources[0].attribution.revisionUrl, 'https://en.wikipedia.org/w/index.php?oldid=1000');
+  assert.equal(parsed.resources[0].attribution?.author, 'Wikipedia contributors');
+  assert.equal(parsed.resources[0].attribution?.revisionUrl, 'https://en.wikipedia.org/w/index.php?oldid=1000');
 });
 test('malformed structures/all-invalid entries differ from genuine empty results; partial invalid entries are counted', async () => {
   implemented('wikipedia'); const { parseWikipediaResponse } = await import('../src/core/services/resources/wikipedia');

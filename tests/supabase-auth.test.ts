@@ -4,7 +4,6 @@ import { createClient, type Session, type SupabaseClient, type User } from '@sup
 import { createSupabaseAuthGateway } from '../src/core/auth/supabase_gateway';
 import { validateSupabaseConfiguration } from '../src/core/auth/supabase_config';
 import { guardedSessionStorage } from '../src/core/auth/session_storage';
-import { captureEmailCallback, clearEmailCallback, getEmailCallback } from '../src/core/auth/email_callback';
 import type { AuthGateway, AuthState } from '../src/core/auth/types';
 
 const url = 'https://abcdefghijklmnopqrst.supabase.co';
@@ -30,14 +29,14 @@ async function stateIs(gateway: AuthGateway, status: AuthState['status']) {
     const detach = gateway.subscribe(state => { if (state.status === status) { clearTimeout(timeout); queueMicrotask(() => { detach(); resolve(); }); } });
   });
 }
-async function fixture(t: TestContext, persisted = new Map<string, string>()) {
-  const requests: { path: string; body: Record<string, unknown> }[] = [];
+async function fixture(t: TestContext, persisted = new Map<string, string>(), emailCodesReady = true) {
+  const requests: { path: string; redirected: boolean; body: Record<string, unknown> }[] = [];
   let reply: ((path: string, body: Record<string, unknown>) => Promise<Response | undefined>) | undefined;
   const clients: SupabaseClient[] = [];
   const fetcher: typeof fetch = async (input, init) => {
     const parsed = new URL(String(input)); const path = parsed.pathname.replace('/auth/v1', '');
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
-    requests.push({ path, body });
+    requests.push({ path, body, redirected: parsed.searchParams.has('redirect_to') });
     const override = await reply?.(path, body); if (override) return override;
     if (path === '/token' || path === '/verify') return Response.json(session());
     if (path === '/signup') return Response.json(user());
@@ -55,8 +54,8 @@ async function fixture(t: TestContext, persisted = new Map<string, string>()) {
   };
   const main = create();
   let clock = Date.now();
-  const gateway = createSupabaseAuthGateway({ main: main.auth, temporary: () => create(true).auth, namespace: 'abcdefghijklmnopqrst',
-    command: action => action(), callbackUrl: () => 'http://localhost:8081/auth/callback', now: () => clock, storageFailed: persistence.hasFailed,
+  const gateway = createSupabaseAuthGateway({ main: main.auth, temporary: () => create(true).auth, emailCodesReady, namespace: 'abcdefghijklmnopqrst',
+    command: action => action(), now: () => clock, storageFailed: persistence.hasFailed,
     cleanup: () => { void persistence.close(); },
   });
   t.after(async () => { gateway.dispose(); await Promise.all(clients.map(client => client.auth.dispose())); });
@@ -179,16 +178,6 @@ test('storage failures are sanitized and fenced; a disposed writer cannot persis
   await assert.rejects(pending, hasCode('unavailable')); assert.equal(writes, 0);
   await assert.rejects(storage.storage.setItem('session', 'late'), hasCode('unavailable')); assert.equal(writes, 0);
 });
-test('callback parsing retains only allowed one-time hashes and rejects ambiguous parameters and bearer sessions', () => {
-  clearEmailCallback(); const token = 'a'.repeat(64);
-  assert.equal(captureEmailCallback(`topictrail://auth/callback?type=recovery&token_hash=${token}`), true);
-  assert.deepEqual(getEmailCallback(), { purpose: 'recovery', tokenHash: token });
-  assert.equal(captureEmailCallback(`https://localhost:8081/auth/callback?type=signup&type=recovery&token_hash=${token}`), true);
-  assert.equal(getEmailCallback(), undefined);
-  assert.equal(captureEmailCallback('http://localhost:8081/auth/callback#access_token=PRIVATE&refresh_token=PRIVATE&type=recovery'), true);
-  assert.equal(getEmailCallback(), undefined);
-  assert.equal(captureEmailCallback(`topictrail://other/callback?type=recovery&token_hash=${token}`), false);
-});
 test('mismatched verified email cannot authorize a password reset for a different account', async t => {
   const f = await fixture(t);
   await assert.rejects(f.gateway.verification!.beginRecovery('someone-else@example.test', '123456'), hasCode('unavailable'));
@@ -221,15 +210,50 @@ test('storage failure after a write cannot report confirmed guest or login succe
     setItem(k, v) { persisted.set(k, v); throw Error('uncertain native write'); } });
   const main = createClient(url, key, { auth: { storageKey: 'uncertain-write', storage: storage.storage, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: async () => Response.json(session()) } });
-  const gateway = createSupabaseAuthGateway({ main: main.auth, namespace: 'abcdefghijklmnopqrst', command: action => action(),
-    callbackUrl: () => 'http://localhost:8081/auth/callback', temporary: () => { throw Error('not needed'); }, storageFailed: storage.hasFailed });
+  const gateway = createSupabaseAuthGateway({ main: main.auth, emailCodesReady: true, namespace: 'abcdefghijklmnopqrst', command: action => action(),
+    temporary: () => { throw Error('not needed'); }, storageFailed: storage.hasFailed });
   t.after(async () => { gateway.dispose(); await main.auth.dispose(); });
   await stateIs(gateway, 'guest'); await assert.rejects(gateway.signIn(email, 'fictional'), hasCode('unavailable'));
   assert.equal(gateway.getSnapshot().status, 'unavailable'); assert.ok(persisted.has('uncertain-write'), 'uncertain persisted data is not wiped');
 });
-test('oversized email callbacks are scrubbed and cannot reuse an earlier action', () => {
-  assert.equal(captureEmailCallback(`topictrail://auth/callback?type=signup&token_hash=${'a'.repeat(64)}`), true);
-  assert.ok(getEmailCallback());
-  assert.equal(captureEmailCallback('topictrail://auth/callback?token_hash=' + 'a'.repeat(20_000)), true);
-  assert.equal(getEmailCallback(), undefined);
+test('email code requests never supply an app redirect or redeem a URL credential', async t => {
+  const f = await fixture(t);
+  await f.gateway.register('Student', email, 'fictional');
+  await f.gateway.verification!.resendConfirmation(email);
+  await f.gateway.sendPasswordReset(email);
+  await f.gateway.verification!.beginRecovery(email, '123456');
+  assert.deepEqual(f.requests.map(r => r.path), ['/signup', '/resend', '/recover', '/verify']);
+  assert.ok(f.requests.every(r => !r.redirected && !('redirect_to' in r.body)));
+  assert.equal(f.requests.at(-1)?.body.token, '123456');
+  assert.ok(f.requests.every(r => !('token_hash' in r.body)));
+});
+test('transfer restore requires an explicit current password sign-in within ten minutes', async t => {
+  const f = await fixture(t);
+  assert.equal(f.gateway.hasFreshTransferSignIn!(), false);
+  await f.gateway.signIn(email, 'fictional');
+  assert.equal(f.gateway.hasFreshTransferSignIn!(), true);
+  f.advance(600_000);
+  assert.equal(f.gateway.hasFreshTransferSignIn!(), false);
+  f.gateway.dispose();
+  const restored = await fixture(t, f.persisted);
+  assert.equal(restored.gateway.getSnapshot().status, 'account');
+  assert.equal(restored.gateway.hasFreshTransferSignIn!(), false);
+  await restored.gateway.signOut();
+  await restored.gateway.signIn(email, 'fictional');
+  assert.equal(restored.gateway.hasFreshTransferSignIn!(), true);
+  await restored.gateway.signOut();
+  assert.equal(restored.gateway.hasFreshTransferSignIn!(), false);
+});
+test('pending provider email setup blocks email actions and preserves normal sign-in', async t => {
+  const f = await fixture(t, new Map(), false);
+  await assert.rejects(f.gateway.register('Student', email, 'fictional'), hasCode('unavailable'));
+  await assert.rejects(f.gateway.sendPasswordReset(email), hasCode('unavailable'));
+  await assert.rejects(f.gateway.verification!.resendConfirmation(email), hasCode('unavailable'));
+  await assert.rejects(f.gateway.verification!.beginRecovery(email, '123456'), hasCode('unavailable'));
+  assert.equal(f.requests.length, 0);
+  await f.gateway.signIn(email, 'fictional');
+  const previous = f.persisted.get('fixture-main');
+  await assert.rejects(f.gateway.sendPasswordReset(email), hasCode('unavailable'));
+  assert.equal(f.gateway.getSnapshot().status, 'account');
+  assert.equal(f.persisted.get('fixture-main'), previous);
 });

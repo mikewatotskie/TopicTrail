@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect, type ImperativeRouter } from 'expo-router';
 import { TTIconButton, TTFigmaIcon, TTFeedback, TTFeedbackRegion, TTNoticeCard, TTScreen, type FeedbackKind } from '../../components';
 import { TTAppBar } from '../../navigation';
 import { TTTypography } from '../../core/design/tokens';
@@ -14,10 +14,10 @@ export function authOrigin(value: unknown): AuthOrigin { return value === 'uploa
 export function authSessionId(value: unknown): string | undefined {
   return typeof value === 'string' && value.length <= 160 && /^[a-z0-9]+-[a-z0-9]+$/.test(value) ? value : undefined;
 }
-export function goAuth(pathname: '/auth/login' | '/auth/register' | '/auth/recovery' | '/auth/created' | '/auth/verify' | '/auth/update-password', origin: AuthOrigin, sessionId?: string) {
+export function goAuth(router: Pick<ImperativeRouter, 'replace'>, pathname: '/auth/login' | '/auth/register' | '/auth/recovery' | '/auth/created' | '/auth/verify' | '/auth/update-password', origin: AuthOrigin, sessionId?: string) {
   router.replace({ pathname, params: { origin, ...(origin === 'upload' && authSessionId(sessionId) ? { sessionId } : {}) } });
 }
-export function leaveAuth(origin: AuthOrigin) { router.replace(origin === 'upload' ? '/upload' : origin === 'settings' ? '/(tabs)/settings' : '/welcome'); }
+export function leaveAuth(router: Pick<ImperativeRouter, 'replace'>, origin: AuthOrigin) { router.replace(origin === 'upload' ? '/upload' : origin === 'settings' ? '/(tabs)/settings' : '/welcome'); }
 export function validEmail(email: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
 export function emailError(email: string) { return !email.trim() ? 'Enter your email address.' : !validEmail(email) ? 'Enter a valid email address.' : undefined; }
 export function authErrorCode(error: unknown) { return error && typeof error === 'object' && 'code' in error ? String(error.code) : 'unavailable'; }
@@ -81,8 +81,8 @@ export function AuthFrame({ title, description, backLabel, onBack, busy = false,
 }) {
   const { colors } = useTheme();
   if (presentation === 'access') return <AuthAccessLayout title={title} description={description} backLabel={backLabel} onBack={onBack} busy={busy}>{children}</AuthAccessLayout>;
-  return <TTScreen variant="form">
-    <TTAppBar title={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: 160, minHeight: 40 }}>
+  return <TTScreen variant="form" backgroundColor={colors.authCanvas}>
+    <TTAppBar appearance="auth" title={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: 160, minHeight: 40 }}>
       <View accessible={false} style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
         <Image source={require('./assets/mark-light.svg')} style={{ width: 24, height: 24 }} contentFit="contain" />
       </View><Text style={[TTTypography.title, { color: colors.onBrand, width: 116 }]}>TopicTrail</Text>

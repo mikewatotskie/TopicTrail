@@ -1,8 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { ReadingProgressSession, type ProgressDocument, type ReadingPosition } from '../../core/services/reading_progress';
 import { readingProgressStorage } from '../../core/services/reading_progress_storage';
+import { useCloudLibrary } from '../library/CloudLibraryContext';
 
 export function useReadingProgress() {
+  const {runtime,state}=useCloudLibrary();
   const mounted = useRef(false);
   const current = useRef<ReadingProgressSession | null>(null);
   const [progressWarning, setProgressWarning] = useState('');
@@ -13,7 +15,8 @@ export function useReadingProgress() {
   }, []);
 
   const hydrateProgress = useCallback(async (document: ProgressDocument, isActive: () => boolean) => {
-    const session = new ReadingProgressSession(readingProgressStorage, document);
+    if(runtime && runtime.getSnapshot().epoch!==state.epoch)return;
+    const session = new ReadingProgressSession(runtime ? runtime.progressStore(readingProgressStorage) : readingProgressStorage, document);
     let warning = '';
     try { await session.hydrate(); }
     catch { warning = 'Saved reading progress could not be loaded. Progress is unavailable for this reading session.'; }
@@ -21,7 +24,7 @@ export function useReadingProgress() {
       current.current = session;
       setProgressWarning(warning);
     }
-  }, []);
+  }, [runtime,state.epoch]);
 
   function acceptRenderedPage(position: ReadingPosition, resume: (page: number) => void): boolean {
     const session = current.current;

@@ -1,4 +1,8 @@
 import { Platform } from 'react-native';
 import { ResourceDiscoveryService } from './discovery';
+import { DuckDuckGoProvider } from './duckduckgo';
 import { WikipediaProvider } from './wikipedia';
-export const resourceDiscovery = new ResourceDiscoveryService([new WikipediaProvider({ native: Platform.OS !== 'web' })]);
+export const resourceDiscovery = new ResourceDiscoveryService([
+  new WikipediaProvider({ native: Platform.OS !== 'web' }),
+  new DuckDuckGoProvider(),
+]);

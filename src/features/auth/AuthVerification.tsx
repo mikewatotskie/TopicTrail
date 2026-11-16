@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { TTButton, TTFeedback, TTNoticeCard } from '../../components';
 import { useAuth } from './AuthContext';
 import { AuthField } from './AuthField';
 import { AuthAvailability, AuthFrame, authOrigin, emailError, goAuth, useAuthTask, type AuthOrigin } from './AuthForm';
-import { getEmailCallback, clearEmailCallback, getEmailCallbackRevision, subscribeEmailCallback } from '../../core/auth/email_callback';
+
+export function EmailSetupNotice() {
+  return <TTNoticeCard title="Email setup pending" message="New accounts and password recovery are paused until the TopicTrail administrator configures email codes. Existing users can log in with their password or keep studying in their current session." />;
+}
 
 type Props = { origin?: AuthOrigin; sessionId?: string; purpose?: 'signup' | 'recovery' };
 /** StrictMode effect replay retains the flow; a real blur releases its temporary authority. */
@@ -18,6 +21,7 @@ function useEmailActionLifetime(cleanup: () => void) {
   }, []));
 }
 export function VerifyEmailScreen({ origin: supplied, sessionId, purpose = 'signup' }: Props) {
+  const router = useRouter();
   const origin = authOrigin(supplied);
   const { gateway, state } = useAuth();
   const verification = gateway.verification;
@@ -27,14 +31,14 @@ export function VerifyEmailScreen({ origin: supplied, sessionId, purpose = 'sign
   const transferred = useRef(false);
   const task = useAuthTask(() => setCode(''));
   useEmailActionLifetime(() => { if (!transferred.current) verification?.cancelRecovery(); });
-  const unavailable = !verification || state.status === 'loading' || state.status === 'unavailable';
+  const unavailable = gateway.emailCodesReady === false || !verification || state.status === 'loading' || state.status === 'unavailable';
   function submit() {
     setAttempted(true);
     if (emailError(email) || !/^\d{6,10}$/.test(code.trim()) || unavailable) return;
     setPendingMessage(purpose === 'recovery' ? 'Verifying recovery code…' : 'Verifying email code…');
     void task.run(() => purpose === 'recovery' ? verification.beginRecovery(email, code) : verification.verifyEmail(email, code), () => {
       setCode('');
-      if (purpose === 'recovery') { transferred.current = true; goAuth('/auth/update-password', origin, sessionId); }
+      if (purpose === 'recovery') { transferred.current = true; goAuth(router, '/auth/update-password', origin, sessionId); }
       else setDone(true);
     });
   }
@@ -44,12 +48,13 @@ export function VerifyEmailScreen({ origin: supplied, sessionId, purpose = 'sign
     void task.run(() => purpose === 'recovery' ? gateway.sendPasswordReset(email) : verification.resendConfirmation(email), () => setSent(true));
   }
   return <AuthFrame announcement={done ? 'status' : 'off'} title={done ? 'Email verified' : purpose === 'recovery' ? 'Verify recovery code' : 'Verify your email'}
-    description={done ? 'Log in with your email and password to continue.' : 'Enter the code from your latest email. Codes and passwords stay out of navigation links.'}
-    busy={task.busy} backLabel="Back to log in" onBack={() => { setCode(''); verification?.cancelRecovery(); goAuth('/auth/login', origin, sessionId); }}>
+    description={gateway.emailCodesReady === false ? 'Return to log in with your existing account.' : done ? 'Log in with your email and password to continue.' : 'Enter the code from your latest email. Codes and passwords stay out of navigation links.'}
+    busy={task.busy} backLabel="Back to log in" onBack={() => { setCode(''); verification?.cancelRecovery(); goAuth(router, '/auth/login', origin, sessionId); }}>
     <AuthAvailability />
+    {gateway.emailCodesReady === false && <EmailSetupNotice />}
     {!!task.error && <TTNoticeCard type="error" title="Verification needs attention" message={task.error} />}
     <TTFeedback visuallyHidden message={task.busy ? pendingMessage : ''} />
-    {done ? <TTButton label="Back to log in" onPress={() => goAuth('/auth/login', origin, sessionId)} /> : <>
+    {done ? <TTButton label="Back to log in" onPress={() => goAuth(router, '/auth/login', origin, sessionId)} /> : <>
       <AuthField label="Email address" value={email} onChange={setEmail} placeholder="Enter your email" email disabled={task.busy || unavailable} error={attempted ? emailError(email) : undefined} />
       <AuthField label="Email code" value={code} onChange={setCode} placeholder="Code from email" oneTimeCode disabled={task.busy || unavailable}
         error={attempted && !/^\d{6,10}$/.test(code.trim()) ? 'Enter the code from your latest email.' : undefined} />
@@ -61,6 +66,7 @@ export function VerifyEmailScreen({ origin: supplied, sessionId, purpose = 'sign
 }
 
 export function UpdatePasswordScreen({ origin: supplied, sessionId }: Props) {
+  const router = useRouter();
   const origin = authOrigin(supplied);
   const { gateway } = useAuth();
   const verification = gateway.verification;
@@ -76,7 +82,7 @@ export function UpdatePasswordScreen({ origin: supplied, sessionId }: Props) {
   }
   return <AuthFrame announcement={done ? 'status' : 'off'} title={done ? 'Password changed' : 'Choose a new password'}
     description={done ? 'Use your new password on the Login screen. This recovery flow has not signed you into a library.' : 'Use a long, unique password. The recovery session expires after ten minutes.'}
-    busy={task.busy} backLabel="Back to log in" onBack={() => { clear(); verification?.cancelRecovery(); goAuth('/auth/login', origin, sessionId); }}>
+    busy={task.busy} backLabel="Back to log in" onBack={() => { clear(); verification?.cancelRecovery(); goAuth(router, '/auth/login', origin, sessionId); }}>
     {!!task.error && <TTNoticeCard type="error" title="Unable to change password" message={task.error} />}
     <TTFeedback visuallyHidden message={task.busy ? 'Changing password…' : ''} />
     {!ready && !done && <TTNoticeCard announcement="alert" title="Recovery verification required" message="Request a new recovery email and verify its code before changing your password." />}
@@ -87,38 +93,18 @@ export function UpdatePasswordScreen({ origin: supplied, sessionId }: Props) {
         error={attempted && password !== confirmation ? 'Your passwords do not match.' : undefined} />
       <TTButton label="Change password" isLoading={task.busy} onPress={submit} />
     </>}
-    <TTButton label="Back to log in" variant="ghost" disabled={task.busy} onPress={() => { clear(); verification?.cancelRecovery(); goAuth('/auth/login', origin, sessionId); }} />
+    <TTButton label="Back to log in" variant="ghost" disabled={task.busy} onPress={() => { clear(); verification?.cancelRecovery(); goAuth(router, '/auth/login', origin, sessionId); }} />
   </AuthFrame>;
 }
 
 export function EmailCallbackScreen() {
-  const revision = useSyncExternalStore(subscribeEmailCallback, getEmailCallbackRevision, getEmailCallbackRevision);
-  return <EmailCallbackAction key={revision} revision={revision} />;
-}
-function EmailCallbackAction({ revision }: { revision: number }) {
+  const router = useRouter();
   const { gateway } = useAuth();
-  const [callback, setCallback] = useState(getEmailCallback);
-  const [done, setDone] = useState(false);
-  const transferred = useRef(false);
-  const task = useAuthTask();
-  useEmailActionLifetime(() => { clearEmailCallback(revision); setCallback(undefined); if (!transferred.current) gateway.verification?.cancelRecovery(); });
-  function verify() {
-    if (!callback?.tokenHash || !gateway.verification || getEmailCallbackRevision() !== revision) return;
-    void task.run(() => gateway.verification!.verifyLink(callback.tokenHash!, callback.purpose), () => {
-      if (getEmailCallbackRevision() !== revision) { gateway.verification?.cancelRecovery(); return; }
-      clearEmailCallback(revision); setCallback(undefined);
-      if (callback.purpose === 'recovery') { transferred.current = true; goAuth('/auth/update-password', 'welcome'); }
-      else setDone(true);
-    });
-  }
-  return <AuthFrame announcement={done ? 'status' : 'off'} title={done ? 'Email verified' : 'Email action'} description={done ? 'Log in with your email and password.'
-    : callback?.tokenHash ? 'Continue to verify this email action. It will not sign you into a library.'
-      : 'If you confirmed your email, return to log in. For password recovery, enter the code from your email.'}
-    busy={task.busy} backLabel="Back to log in" onBack={() => { clearEmailCallback(); goAuth('/auth/login', 'welcome'); }}>
-    {!!task.error && <TTNoticeCard type="error" title="Email action needs attention" message={task.error} />}
-    <TTFeedback visuallyHidden message={task.busy ? 'Verifying email action…' : ''} />
-    {!!callback?.tokenHash && !done && <TTButton label="Continue email action" isLoading={task.busy} disabled={!gateway.verification} onPress={verify} />}
-    {!done && <TTButton label="Enter email code" disabled={task.busy} onPress={() => { clearEmailCallback(); router.replace({ pathname: '/auth/verify', params: { origin: 'welcome', purpose: callback?.purpose ?? 'signup' } }); }} />}
-    <TTButton label="Back to log in" variant="ghost" disabled={task.busy} onPress={() => { clearEmailCallback(); goAuth('/auth/login', 'welcome'); }} />
+  const paused = gateway.emailCodesReady === false;
+  return <AuthFrame title="Enter your email code" description={paused ? 'Return to log in with your existing account.' : 'Open the latest TopicTrail email and enter its code. You can also request a new code.'}
+    busy={false} backLabel="Back to log in" onBack={() => goAuth(router, '/auth/login', 'welcome')}>
+    {paused && <EmailSetupNotice />}
+    <TTButton label="Enter verification code" disabled={paused} onPress={() => goAuth(router, '/auth/verify', 'welcome')} />
+    <TTButton label="Enter recovery code" variant="ghost" disabled={paused} onPress={() => router.replace({ pathname: '/auth/verify', params: { origin: 'welcome', purpose: 'recovery' } })} />
   </AuthFrame>;
 }

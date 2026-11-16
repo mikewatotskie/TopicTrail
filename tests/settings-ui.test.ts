@@ -7,14 +7,14 @@ import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 
 // Real Settings, ThemeProvider, navigation and RN Web controls; only platform IO is replaced.
-let ui: { SettingsHarness: React.ComponentType; NavigationHarness: React.ComponentType };
+let ui: { SettingsHarness: React.ComponentType; NavigationHarness: React.ComponentType; RailHarness: React.ComponentType; entries: string[] };
 let dom: JSDOM;
 const previous = new Map<string, PropertyDescriptor | undefined>();
 before(async () => {
   dom = new JSDOM('<!doctype html><html><body><main></main></body></html>', { url: 'https://settings.test', pretendToBeVisual: true });
   Object.defineProperty(dom.window, 'matchMedia', { value: () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }) });
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
-    navigator: dom.window.navigator, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element,
+    navigator: dom.window.navigator, Node: dom.window.Node, HTMLElement: dom.window.HTMLElement, Element: dom.window.Element,
     ShadowRoot: dom.window.ShadowRoot, IS_REACT_ACT_ENVIRONMENT: true,
     requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window), cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window) })) {
     previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
@@ -22,12 +22,26 @@ before(async () => {
   }
   const boundaries: Record<string, string> = {
     '@react-native-async-storage/async-storage': `export default {getItem:async()=> 'light',setItem:async()=>{}};`,
-    'expo-router': `export const router={canGoBack:()=>false,back(){},navigate(){}};`,
+    'expo-router': `export const useRouter=()=>router;export const router={canGoBack:()=>false,back(){},navigate(){}};`,
     'expo-image': `import React from 'react';export const Image=()=>React.createElement('span');`,
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>React.createElement('span');Ionicons.glyphMap={};`,
     'react-native-safe-area-context': `export {View as SafeAreaView} from 'react-native-web';export const useSafeAreaInsets=()=>({top:0,bottom:0,left:0,right:0});`,
   };
-  const compiled = await build({ stdin: { contents: `import React,{useState} from 'react';import {ThemeProvider} from './src/core/theme/ThemeContext';import {SettingsScreen} from './src/features/settings/SettingsScreen';import {TTBottomNavigationBar} from './src/navigation';export function SettingsHarness(){return <ThemeProvider><SettingsScreen/></ThemeProvider>}export function NavigationHarness(){const [current,setCurrent]=useState('home');return <ThemeProvider><TTBottomNavigationBar currentDestination={current} onDestinationSelected={setCurrent}/></ThemeProvider>}`, loader: 'tsx', resolveDir: process.cwd() },
+  const compiled = await build({ stdin: { contents: `import React,{useState} from 'react';
+      import {ThemeProvider} from './src/core/theme/ThemeContext';
+      import {SettingsScreen} from './src/features/settings/SettingsScreen';
+      import {TTBottomNavigationBar} from './src/navigation';
+      import {TTNavigationRail} from './src/navigation/TTNavigationRail';
+      export const entries = [];
+      export function SettingsHarness(){return <ThemeProvider><SettingsScreen/></ThemeProvider>}
+      export function NavigationHarness(){
+        const [current,setCurrent]=useState('home');
+        return <ThemeProvider><TTBottomNavigationBar currentDestination={current} onDestinationSelected={setCurrent}
+          onScanEntry={entry=>entries.push(entry)} /></ThemeProvider>
+      }
+      export function RailHarness(){
+        return <ThemeProvider><TTNavigationRail routeName="home" onScanEntry={entry=>entries.push(entry)} /></ThemeProvider>
+      }`, loader: 'tsx', resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external', alias: { 'react-native': 'react-native-web' }, loader: { '.svg': 'dataurl' },
     plugins: [{ name: 'settings-platform-io', setup(builder) {
       builder.onResolve({ filter: /core\/auth\/session$/ }, () => ({ path: 'auth-session', namespace: 'io' }));
@@ -96,3 +110,37 @@ test('closing privacy details preserves that content throughout the modal exit a
     assert.ok(!closingDialog.textContent?.includes('Reputation checks are unavailable'), 'closing privacy must not reveal the other detail screen');
   });
 });
+
+for (const layout of ['NavigationHarness', 'RailHarness'] as const) {
+  test(`${layout} inserts a Scan action, preserves the current tab, and hands off each source once`, async () => {
+    await mounted(ui[layout], async document => {
+      ui.entries.length = 0;
+      const nav = Array.from(document.querySelectorAll<HTMLElement>('main [role="tab"], main [aria-label="Scan"]'));
+      assert.deepEqual(nav.map(item => item.getAttribute('aria-label')), ['Home', 'My Syllabi', 'Scan', 'Saved', 'Settings']);
+      const scan = nav[2];
+      assert.equal(scan.getAttribute('role'), 'button');
+      assert.equal(scan.hasAttribute('aria-selected'), false);
+      for (const [label, entry] of [['Scan a photo', 'pick'], ['Take a photo', 'capture']]) {
+        await act(async () => { scan.focus(); scan.click(); });
+        const dialog = document.querySelector<HTMLElement>('[aria-modal="true"]');
+        assert.ok(dialog);
+        assert.equal(nav[0].getAttribute('aria-selected'), 'true');
+        assert.ok(dialog.textContent?.includes('Choose an existing JPG or PNG from your device'));
+        assert.ok(dialog.textContent?.includes('Use the camera to photograph a document'));
+        const row = dialog.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+        assert.ok(row);
+        await act(async () => { row.click(); row.click(); });
+        assert.equal(ui.entries.at(-1), entry);
+      }
+      assert.deepEqual(ui.entries, ['pick', 'capture']);
+      await act(async () => scan.click());
+      const close = document.querySelector<HTMLElement>('[aria-label="Close scan chooser"]');
+      assert.ok(close);
+      await act(async () => close.click());
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 45)); });
+      assert.equal(document.querySelector('[aria-modal="true"]'), null);
+      assert.equal(document.activeElement, scan);
+      assert.deepEqual(ui.entries, ['pick', 'capture']);
+    });
+  });
+}

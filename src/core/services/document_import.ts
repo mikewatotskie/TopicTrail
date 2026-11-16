@@ -28,14 +28,14 @@ export class DocumentImportService {
 
   async pickDocument(): Promise<DocumentPicker.DocumentPickerAsset | null> {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
       // Android's picker cache can differ from Expo Go's scoped FileSystem cache.
       // Copy the granted provider URI into our own cache before publishing it.
       copyToCacheDirectory: Platform.OS !== 'android', multiple: false,
     });
     const picked = result.canceled ? null : result.assets[0] ?? null;
     if (!picked || Platform.OS !== 'android') return picked;
-    if ((picked.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50MB limit');
+    if ((picked.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50 MiB limit');
 
     const directory = new Directory(Paths.cache, 'topictrail-imports');
     directory.create({ idempotent: true, intermediates: true });
@@ -43,7 +43,7 @@ export class DocumentImportService {
     try {
       try { await new File(picked.uri).copy(staged); }
       catch { throw new Error('This file could not be copied. Choose the file again from this device.'); }
-      if ((staged.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50MB limit');
+      if ((staged.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50 MiB limit');
       try {
         const handle = staged.open(FileMode.ReadOnly);
         try { await handle.readBytes(1); }
@@ -71,13 +71,13 @@ export class DocumentImportService {
       const replay = await preflightImport(this.storage, attempt);
       if (replay) return replay;
       const file = new File(uri);
-      if ((file.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50MB limit');
+      if ((file.size ?? 0) > MAX_FILE_SIZE_BYTES) throw new ImportOperationError('reselect', 'File size exceeds the 50 MiB limit');
       const bytes = await file.bytes().catch(() => {
         throw new ImportOperationError('reselect', 'This file is no longer readable. Choose the file again from this device.');
       });
       let format: ReturnType<typeof validateDocument>;
       try { format = validateDocument(originalName, bytes, file.size ?? bytes.length); }
-      catch (error) { throw new ImportOperationError('reselect', error instanceof Error ? error.message : 'Choose another PDF or DOCX.'); }
+      catch (error) { throw new ImportOperationError('reselect', error instanceof Error ? error.message : 'Choose another PDF, DOCX or PPTX.'); }
       const document = await this.storage.saveDocument({ originalPath: uri,
         title: originalName.replace(/\.[^/.]+$/, '').trim() || 'Untitled syllabus', format, attempt });
       if (this.stagedSelection?.uri === uri) {

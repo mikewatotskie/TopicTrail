@@ -21,8 +21,9 @@ export const TTLightColors = {
   /** Pressed state for brand color - #00266F */
   brandPressed: '#00266F',
   
-  /** Light canvas/background - #F5F5F5 */
-  canvas: '#F5F5F5',
+  canvas: '#F7F9FC',
+  authCanvas: '#F5F5F5',
+  sky: '#60B5FF',
   
   /** Primary text color - #13213B */
   ink: '#13213B',
@@ -91,6 +92,7 @@ export const TTDarkColors = {
   
   /** Dark canvas/background - #0B1220 */
   canvas: '#0B1220',
+  authCanvas: '#0B1220',
   
   /** Primary text color (light) - #F5F7FC */
   ink: '#F5F7FC',

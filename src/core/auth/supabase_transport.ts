@@ -15,7 +15,7 @@ function operationFor(input: RequestInfo | URL, init?: RequestInit): AuthOperati
 }
 
 /** One transport per SDK client. Refresh requests cannot overwrite an explicit password operation. */
-export function createAuthTransport(timeoutMs?: number) {
+export function createAuthTransport(timeoutMs?: number, cooldowns = new Map<AuthOperation, number>()) {
   const active = new Map<AuthOperation, { dispatched: boolean; evidence: AuthRequestEvidence }>();
   const fetch = createAuthFetch((input, init, evidence) => {
     const operation = operationFor(input, init);
@@ -24,6 +24,10 @@ export function createAuthTransport(timeoutMs?: number) {
   }, timeoutMs);
   function wrap(auth: SupabaseAuthPort): SupabaseAuthPort {
     async function request<T extends { error: unknown }>(operation: AuthOperation, action: () => Promise<T>): Promise<T> {
+      const manual = operation === 'login' || operation === 'recovery_request';
+      if (manual && (cooldowns.get(operation) ?? 0) > Date.now()) {
+        throw new AuthOperationError('rate_limit', 'Too many attempts. Please wait before trying again.');
+      }
       if (active.has(operation)) throw new AuthOperationError('busy', 'An account request is already running.');
       const trace = { dispatched: false, evidence: {} as AuthRequestEvidence };
       active.set(operation, trace);
@@ -49,6 +53,11 @@ export function createAuthTransport(timeoutMs?: number) {
         return result;
       } catch (error) {
         const mapped = supabaseAuthError(error, trace.evidence);
+        if (manual && mapped.code === 'rate_limit') {
+          const now = Date.now();
+          cooldowns.set(operation, Math.max(now + 1_000, trace.evidence.retryAt ?? now + 60_000,
+            cooldowns.get(operation) ?? 0));
+        }
         reportAuthDiagnostic(operation, mapped.code, trace.evidence);
         throw operation === 'signup' ? signupOutcomeError(mapped, trace.dispatched) : mapped;
       } finally { active.delete(operation); }

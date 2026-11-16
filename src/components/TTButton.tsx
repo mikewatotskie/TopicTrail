@@ -31,7 +31,8 @@ export function TTButton({ label, variant = 'primary', size = 'regular', icon, i
   const graphic = typeof icon === 'string' ? <TTIcon name={icon} color={foreground} /> : icon;
   return <TouchableOpacity {...props} disabled={inactive} onPress={onPress}
     role={undefined} accessibilityRole="button" accessibilityLabel={semanticLabel ?? props.accessibilityLabel ?? label}
-    accessibilityState={{ disabled: inactive, busy: isLoading }}
+    accessibilityState={{ ...props.accessibilityState, disabled: inactive, busy: isLoading }}
+    aria-selected={props['aria-selected']??props.accessibilityState?.selected} aria-expanded={props['aria-expanded']??props.accessibilityState?.expanded}
     style={[styles.button, { backgroundColor: background, minHeight: 48,
       borderWidth: outlined || (variant === 'study' && !inactive) ? 1 : 0, borderColor: variant === 'study' ? colors.brand : colors.link,
       width: isExpanded || size === 'fullWidth' ? '100%' : undefined }, style,

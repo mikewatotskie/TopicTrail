@@ -6,7 +6,6 @@ import { resolve } from 'node:path';
 import { createClient, type SupabaseClient, type Session } from '@supabase/supabase-js';
 import type { AuthGateway, AuthState } from '../src/core/auth/types';
 import { redirectSystemPath } from '../src/app/+native-intent';
-import { clearEmailCallback, getEmailCallback } from '../src/core/auth/email_callback';
 
 // Real production native factory/adapter + installed SDK; native IO and provider HTTP are synthetic.
 // These tests do not execute Android Keystore or establish phone acceptance.
@@ -50,7 +49,7 @@ test('native local logout still succeeds after an offline remote revocation fail
 });
 async function fixture(t: TestContext) {
   const values = new Map<string, string>();
-  const requests: { path: string; refresh: boolean; callbackMatches: boolean; refreshMatches: boolean }[] = [];
+  const requests: { path: string; refresh: boolean; hasRedirect: boolean; refreshMatches: boolean }[] = [];
   const clients: SupabaseClient[] = []; const gateways: AuthGateway[] = [];
   const listeners = new Set<(state: string) => void>();
   let available = true; let loseWrite = false; let denyDelete = false; let uid = first; let revision = 0;
@@ -76,7 +75,7 @@ async function fixture(t: TestContext) {
     assert.equal(url.origin, `https://${namespace}.supabase.co`, 'No live provider endpoint is allowed');
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
     const refresh = url.searchParams.get('grant_type') === 'refresh_token';
-    requests.push({ path: url.pathname, refresh, callbackMatches: url.searchParams.get('redirect_to') === 'topictrail://auth/callback',
+    requests.push({ path: url.pathname, refresh, hasRedirect: url.searchParams.has('redirect_to'),
       refreshMatches: refresh && body.refresh_token === session(uid, revision).refresh_token });
     const custom = await reply?.(url); if (custom) return custom;
     if (url.pathname.endsWith('/token') || url.pathname.endsWith('/verify')) return Response.json(session(uid, refresh ? ++revision : revision));
@@ -96,7 +95,7 @@ async function fixture(t: TestContext) {
   new Function('require', 'module', 'exports', bundled.outputFiles[0].text)(createRequire(resolve('package.json')), compiled, compiled.exports);
   const factory = compiled.exports as typeof import('../src/core/auth/supabase_client');
   function open() {
-    const gateway = factory.createSupabaseSession({ url: `https://${namespace}.supabase.co`, publishableKey: 'sb_publishable_' + 'x'.repeat(32), namespace });
+    const gateway = factory.createSupabaseSession({ url: `https://${namespace}.supabase.co`, emailCodesReady: true, publishableKey: 'sb_publishable_' + 'x'.repeat(32), namespace });
     gateways.push(gateway); return gateway;
   }
   t.after(async () => {
@@ -173,11 +172,11 @@ test('disposed native login cannot write over a replacement account session', as
   const state = current.getSnapshot(); assert.ok(state.status === 'account' && state.account.uid === second);
   assert.ok(JSON.parse(f.values.get(key)!).user.id === second);
 });
-test('native recovery uses the expected redirect and isolated memory session while keeping an existing account', async t => {
+test('native recovery omits redirects and isolated memory session while keeping an existing account', async t => {
   const f = await fixture(t); const gateway = f.open(); await stateIs(gateway, 'guest');
   await gateway.signIn('native@example.test', 'synthetic'); const saved = f.values.get(key);
   await gateway.sendPasswordReset('native@example.test');
-  assert.ok(f.requests.some(request => request.path.endsWith('/recover') && request.callbackMatches));
+  assert.ok(f.requests.some(request => request.path.endsWith('/recover') && !request.hasRedirect));
   await gateway.verification!.beginRecovery('native@example.test', '123456');
   assert.equal(gateway.verification!.hasRecoverySession(), true); assert.ok(f.values.get(key) === saved);
   await gateway.verification!.completeRecovery('synthetic-new');
@@ -206,11 +205,10 @@ test('SDK initialization cannot restart native refresh while AppState is backgro
 test('cold and warm native intents strip credentials before Router receives a route', () => {
   for (const initial of [true, false]) {
     assert.equal(redirectSystemPath({ initial, path: 'topictrail://auth/callback?type=recovery&token_hash=' + 'a'.repeat(64) }), '/auth/callback');
-    assert.equal(getEmailCallback()?.purpose, 'recovery');
     assert.equal(redirectSystemPath({ initial, path: 'topictrail://auth/callback#access_token=synthetic&refresh_token=synthetic' }), '/auth/callback');
-    assert.equal(getEmailCallback(), undefined);
     assert.equal(redirectSystemPath({ initial, path: 'topictrail://auth/callback?type=signup&type=recovery&token_hash=' + 'a'.repeat(64) }), '/auth/callback');
-    assert.equal(getEmailCallback(), undefined);
+    assert.equal(redirectSystemPath({ initial, path: 'https://other.example/auth/callback?token_hash=synthetic' }), '/auth/login');
+    assert.equal(redirectSystemPath({ initial, path: '/another-route#refresh_token=synthetic' }), '/auth/login');
+    assert.equal(redirectSystemPath({ initial, path: '/reader/document-1' }), '/reader/document-1');
   }
-  clearEmailCallback();
 });

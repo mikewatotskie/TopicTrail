@@ -7,6 +7,7 @@
 export enum DocumentFormat {
   PDF = 'pdf',
   DOCX = 'docx',
+  PPTX = 'pptx',
 }
 
 export interface DocumentJson {

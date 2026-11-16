@@ -11,8 +11,7 @@ import { nativeProbeSource, type NativePropRecord } from './helpers/accessibilit
 // Real screens, provider, theme and RN Web controls. Only router/platform/provider IO is replaced.
 let ui: { Harness: React.ComponentType<{ gateway?: AuthGateway; kind: string; origin?: string; purpose?: string; missing?: boolean; strict?: boolean }>; setFocused: (focused: boolean) => void;
   setProbePlatform: (platform: 'web' | 'android') => void; nativeProps: NativePropRecord[]; roleViolations: string[];
-  redirectSystemPath: typeof import('../src/app/+native-intent').redirectSystemPath;
-  getEmailCallback: typeof import('../src/core/auth/email_callback').getEmailCallback };
+  redirectSystemPath: typeof import('../src/app/+native-intent').redirectSystemPath };
 let dom: JSDOM;
 let routes: unknown[] = [];
 const previous = new Map<string, PropertyDescriptor | undefined>();
@@ -30,7 +29,7 @@ before(async () => {
     'react-native': nativeProbeSource(),
     '@react-native-async-storage/async-storage': `export default {getItem:async()=> 'dark',setItem:async()=>{}};`,
     'expo-router': `import {useEffect} from 'react';
-      export const router={canGoBack:()=>false,back(){throw Error('history Back is forbidden')},navigate(p){globalThis.__authRoutes.push(p)},push(p){globalThis.__authRoutes.push(p)},replace(p){globalThis.__authRoutes.push(p)}};
+      const scopedRouter={canGoBack:()=>false,back(){throw Error('history Back is forbidden')},navigate(p){globalThis.__authRoutes.push(p)},push(p){globalThis.__authRoutes.push(p)},replace(p){globalThis.__authRoutes.push(p)}};export function useRouter(){return scopedRouter;}export const router=new Proxy({}, {get(){throw Error('Global router unavailable');}});
       let focused=true;const listeners=new Set();
       export function setAuthTestFocused(next){if(next===focused)return;focused=next;listeners.forEach(listener=>listener());}
       export function useFocusEffect(effect){useEffect(()=>{let cleanup;const changed=()=>{cleanup?.();cleanup=focused?effect():undefined;};listeners.add(changed);changed();return()=>{listeners.delete(changed);cleanup?.();};},[effect]);}`,
@@ -38,7 +37,7 @@ before(async () => {
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>React.createElement('span');Ionicons.glyphMap={};`,
     'react-native-safe-area-context': `export {View as SafeAreaView} from 'react-native-web';export const useSafeAreaInsets=()=>({top:0,bottom:0,left:0,right:0});`,
   };
-  const compiled = await build({ stdin: { contents: `export {setProbePlatform,nativeProps,roleViolations} from 'react-native';export {redirectSystemPath} from './src/app/+native-intent';export {getEmailCallback} from './src/core/auth/email_callback';import React,{StrictMode} from 'react';export {setAuthTestFocused as setFocused} from 'expo-router';import {ThemeProvider} from './src/core/theme/ThemeContext';import {AuthProvider} from './src/features/auth/AuthContext';import {LoginScreen,RegistrationScreen,RecoveryScreen,AccountCreatedScreen,ProfileScreen} from './src/features/auth/AuthScreens';import {VerifyEmailScreen,UpdatePasswordScreen,EmailCallbackScreen} from './src/features/auth/AuthVerification';import {SettingsScreen} from './src/features/settings/SettingsScreen';import {WelcomeScreen} from './src/features/splash/WelcomeScreen';const screens={login:LoginScreen,register:RegistrationScreen,recovery:RecoveryScreen,created:AccountCreatedScreen,profile:ProfileScreen,settings:SettingsScreen,welcome:WelcomeScreen,verify:VerifyEmailScreen,update:UpdatePasswordScreen,callback:EmailCallbackScreen};export function Harness({gateway,kind,origin='welcome',purpose='signup',missing=false,strict=false}){const Screen=screens[kind];const content=<ThemeProvider>{missing?<Screen origin={origin} purpose={purpose}/>:<AuthProvider gateway={gateway}><Screen origin={origin} purpose={purpose}/></AuthProvider>}</ThemeProvider>;return strict?<StrictMode>{content}</StrictMode>:content;}`, loader: 'tsx', resolveDir: process.cwd() },
+  const compiled = await build({ stdin: { contents: `export {setProbePlatform,nativeProps,roleViolations} from 'react-native';export {redirectSystemPath} from './src/app/+native-intent';import React,{StrictMode} from 'react';export {setAuthTestFocused as setFocused} from 'expo-router';import {ThemeProvider} from './src/core/theme/ThemeContext';import {AuthProvider} from './src/features/auth/AuthContext';import {LoginScreen,RegistrationScreen,RecoveryScreen,AccountCreatedScreen,ProfileScreen} from './src/features/auth/AuthScreens';import {VerifyEmailScreen,UpdatePasswordScreen,EmailCallbackScreen} from './src/features/auth/AuthVerification';import {SettingsScreen} from './src/features/settings/SettingsScreen';import {WelcomeScreen} from './src/features/splash/WelcomeScreen';const screens={login:LoginScreen,register:RegistrationScreen,recovery:RecoveryScreen,created:AccountCreatedScreen,profile:ProfileScreen,settings:SettingsScreen,welcome:WelcomeScreen,verify:VerifyEmailScreen,update:UpdatePasswordScreen,callback:EmailCallbackScreen};export function Harness({gateway,kind,origin='welcome',purpose='signup',missing=false,strict=false}){const Screen=screens[kind];const content=<ThemeProvider>{missing?<Screen origin={origin} purpose={purpose}/>:<AuthProvider gateway={gateway}><Screen origin={origin} purpose={purpose}/></AuthProvider>}</ThemeProvider>;return strict?<StrictMode>{content}</StrictMode>:content;}`, loader: 'tsx', resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external', loader: { '.svg': 'dataurl' },
     plugins: [{ name: 'auth-platform-io', setup(builder) {
       builder.onResolve({ filter: /core\/auth\/session$|\.\/session$/ }, () => ({ path: 'auth-session', namespace: 'io' }));
@@ -225,10 +224,10 @@ test('reset failure never shows confirmation; explicit retry can recover', async
   const f = fake(); let attempts = 0;
   f.gateway.sendPasswordReset = async () => { attempts++; if (attempts === 1) throw Object.assign(new Error(), { code: 'network' }); };
   await mounted('recovery', f.gateway, async () => {
-    await fill('Email address', 'ada@example.com'); await click('Send reset link');
+    await fill('Email address', 'ada@example.com'); await click('Send recovery email');
     assert.doesNotMatch(dom.window.document.body.textContent!, /If an account uses this email/);
     assert.match(dom.window.document.body.textContent!, /connection/); assert.equal(routes.length, 0);
-    await click('Send reset link'); assert.equal(attempts, 2); assert.match(dom.window.document.body.textContent!, /If an account uses this email/);
+    await click('Send recovery email'); assert.equal(attempts, 2); assert.match(dom.window.document.body.textContent!, /If an account uses this email/);
   });
 });
 test('logout failure keeps the account visible and offers retry or Cancel', async () => {
@@ -267,8 +266,8 @@ test('partial account creation prevents duplicate registration and requires sign
 test('reset validates requests, shows neutral acknowledgement and returns to Login with origin intact', async () => {
   const f = fake();
   await mounted('recovery', f.gateway, async () => {
-    await click('Send reset link'); assert.equal(f.calls.length, 0);
-    await fill('Email address', 'ada@example.com'); await click('Send reset link');
+    await click('Send recovery email'); assert.equal(f.calls.length, 0);
+    await fill('Email address', 'ada@example.com'); await click('Send recovery email');
     assert.deepEqual(f.calls, [['reset', 'ada@example.com']]);
     assert.match(dom.window.document.body.textContent!, /If an account uses this email/);
     assert.doesNotMatch(dom.window.document.body.textContent!, /email (was|has been) sent/i);
@@ -290,8 +289,8 @@ test('profile preserves identity and local-session information; reset and Back k
   const f = fake({ status: 'account', account });
   await mounted('profile', f.gateway, async () => {
     const text = dom.window.document.body.textContent!;
-    for (const content of ['Ada Lovelace', 'ada@example.com', 'Signed in', 'Your local library',
-      'Your syllabi and saved links stay on this device.', 'Signing in or out does not change them.',
+    for (const content of ['Ada Lovelace', 'ada@example.com', 'Signed in', 'Your account library',
+      'Signed-in documents sync to this account.', 'Saved links, reading positions, names and Trash changes also sync. OCR text remains on this device.',
       'Your sign-in is remembered in this browser. Use Log out to end your session.']) assert.ok(text.includes(content), content);
     assert.doesNotMatch(text, /ends when you reload/);
     await click('Reset password');
@@ -367,7 +366,6 @@ function emailGateway() {
     async verifyEmail(...args) { f.calls.push(['verify', ...args]); },
     async resendConfirmation(...args) { f.calls.push(['resend', ...args]); },
     async beginRecovery(...args) { f.calls.push(['beginRecovery', ...args]); ready = true; },
-    async verifyLink() {},
     hasRecoverySession: () => ready,
     recoveryEmail: () => ready ? 'ada@example.com' : null,
     async completeRecovery(...args) { f.calls.push(['completeRecovery', ...args]); ready = false; },
@@ -425,39 +423,27 @@ test('password update validates matching fields and shows success without loggin
     assert.equal(f.gateway.getSnapshot().status, 'guest'); assert.equal(routes.length, 0);
   });
 });
-test('a warm callback replaces an already visible email action without submitting its stale hash', async () => {
-  const f = emailGateway(); const verified: string[] = [];
-  f.gateway.verification!.verifyLink = async hash => { verified.push(hash); };
-  ui.redirectSystemPath({ initial: true, path: 'topictrail://auth/callback?type=signup&token_hash=' + 'a'.repeat(64) });
-  await mounted('callback', f.gateway, async () => {
-    await act(async () => { ui.redirectSystemPath({ initial: false, path: 'topictrail://auth/callback?type=signup&token_hash=' + 'b'.repeat(64) }); });
-    assert.equal(verified.slice().length, 0, 'Incoming callbacks require explicit Continue');
-    await click('Continue email action');
-    assert.ok(verified.length === 1 && verified[0] === 'b'.repeat(64), 'Only the newest callback may be verified');
-    assert.match(dom.window.document.body.textContent!, /Email verified/);
-  }, { strict: true });
-});
-test('invalid warm callback removes the previous actionable link from the retained screen', async () => {
+test('old credential links only offer manual code entry, including warm navigation', async () => {
   const f = emailGateway();
-  ui.redirectSystemPath({ initial: true, path: 'topictrail://auth/callback?type=signup&token_hash=' + 'a'.repeat(64) });
-  await mounted('callback', f.gateway, async () => {
-    button('Continue email action');
-    await act(async () => { ui.redirectSystemPath({ initial: false, path: 'topictrail://auth/callback#access_token=synthetic' }); });
-    assert.ok(dom.window.document.querySelector('[aria-label="Continue email action"]') === null, 'Invalid callback removes Continue');
-    assert.equal(ui.getEmailCallback(), undefined);
-  });
+  const token = 'a'.repeat(64);
+  for (const initial of [true, false]) {
+    const route = ui.redirectSystemPath({ initial, path: 'topictrail://auth/callback?type=recovery&token_hash=' + token });
+    assert.equal(route, '/auth/callback');
+    await mounted('callback', f.gateway, async () => {
+      assert.equal(dom.window.document.body.textContent!.includes(token), false);
+      assert.equal(dom.window.document.querySelector('[aria-label="Continue email action"]'), null);
+      await click('Enter recovery code');
+      assert.deepEqual(routes.at(-1), { pathname: '/auth/verify', params: { origin: 'welcome', purpose: 'recovery' } });
+      assert.deepEqual(f.calls, []);
+    });
+  }
 });
-test('replaced callback completion cannot navigate or clear a newer pending email action', async () => {
-  const f = emailGateway(); let finish!: () => void;
-  f.gateway.verification!.verifyLink = () => new Promise<void>(resolve => { finish = resolve; });
-  ui.redirectSystemPath({ initial: true, path: 'topictrail://auth/callback?type=recovery&token_hash=' + 'a'.repeat(64) });
-  await mounted('callback', f.gateway, async () => {
-    await click('Continue email action');
-    await act(async () => { ui.redirectSystemPath({ initial: false, path: 'topictrail://auth/callback?type=signup&token_hash=' + 'b'.repeat(64) }); });
-    await act(async () => finish());
-    assert.equal(routes.length, 0, 'A superseded recovery callback must not navigate to password update');
-    assert.ok(ui.getEmailCallback()?.tokenHash === 'b'.repeat(64), 'Old cleanup must preserve the new callback');
-    assert.notEqual(button('Continue email action').getAttribute('aria-disabled'), 'true');
+test('recovery code entry from a second device needs no new email', async () => {
+  const f = emailGateway();
+  await mounted('recovery', f.gateway, async () => {
+    await click('Enter recovery code');
+    assert.deepEqual(routes.at(-1), { pathname: '/auth/verify', params: { origin: 'welcome', purpose: 'recovery' } });
+    assert.deepEqual(f.calls, []);
   });
 });
 
@@ -509,12 +495,11 @@ for (const platform of ['android', 'web'] as const) {
     await mounted('update', emailGateway().gateway, async () => { feedback(/Recovery verification required/, 'assertive'); }, { platform });
   });
 
-  for (const kind of ['login', 'register', 'recovery', 'verify', 'update', 'callback', 'profile']) {
+  for (const kind of ['login', 'register', 'recovery', 'verify', 'update', 'profile']) {
     test(`${platform} ${kind} pending → failure → retry → success uses valid feedback and preserves navigation`, async () => {
       const f = emailGateway();
       if (kind === 'profile') f.emit({ status: 'account', account });
       if (kind === 'update') f.ready();
-      if (kind === 'callback') ui.redirectSystemPath({ initial: true, path: 'topictrail://auth/callback?type=signup&token_hash=' + 'c'.repeat(64) });
       let finish!: () => void, fail!: () => void, requests = 0;
       const operation = () => { requests++; return new Promise<void>((resolve, reject) => {
         finish = () => { if (kind === 'login') f.emit({ status: 'account', account }); if (kind === 'profile') f.emit({ status: 'guest' }); resolve(); };
@@ -525,10 +510,9 @@ for (const platform of ['android', 'web'] as const) {
       else if (kind === 'recovery') f.gateway.sendPasswordReset = operation;
       else if (kind === 'verify') f.gateway.verification!.verifyEmail = operation;
       else if (kind === 'update') f.gateway.verification!.completeRecovery = operation;
-      else if (kind === 'callback') f.gateway.verification!.verifyLink = operation;
       else f.gateway.signOut = operation;
-      const labels: Record<string, string> = { login: 'Log in', register: 'Create account', recovery: 'Send reset link', verify: 'Verify code', update: 'Change password', callback: 'Continue email action', profile: 'Log out' };
-      const pending: Record<string, RegExp> = { login: /Logging in/, register: /Creating account/, recovery: /Requesting reset link/, verify: /Verifying email code/, update: /Changing password/, callback: /Verifying email action/, profile: /Logging out/ };
+      const labels: Record<string, string> = { login: 'Log in', register: 'Create account', recovery: 'Send recovery email', verify: 'Verify code', update: 'Change password', profile: 'Log out' };
+      const pending: Record<string, RegExp> = { login: /Logging in/, register: /Creating account/, recovery: /Requesting recovery email/, verify: /Verifying email code/, update: /Changing password/, profile: /Logging out/ };
       await mounted(kind, f.gateway, async show => {
         if (['login', 'register', 'recovery', 'verify'].includes(kind)) await fill('Email address', 'fixture@example.test');
         if (['login', 'register'].includes(kind)) await fill('Password', 'fixture passphrase');
@@ -578,7 +562,7 @@ for (const platform of ['android', 'web'] as const) {
     for (const kind of ['login', 'register', 'recovery', 'verify']) {
       const f = emailGateway();
       await mounted(kind, f.gateway, async () => {
-        await click(kind === 'login' ? 'Log in' : kind === 'register' ? 'Create account' : kind === 'recovery' ? 'Send reset link' : 'Verify code');
+        await click(kind === 'login' ? 'Log in' : kind === 'register' ? 'Create account' : kind === 'recovery' ? 'Send recovery email' : 'Verify code');
         feedback(/Enter your email address/, 'polite'); assert.equal(f.calls.length, 0);
       }, { platform });
     }

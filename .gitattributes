@@ -1,0 +1,7 @@
+# Keep the reader bundles and hash-verified OCR fixtures byte-identical on every platform.
+assets/reader/viewer.html -text
+assets/reader/office-viewer.html -text
+assets/reader/ocr-worker.txt -text
+tests/fixtures/ocr-v12/** -text
+*.traineddata binary
+android/gradlew text eol=lf

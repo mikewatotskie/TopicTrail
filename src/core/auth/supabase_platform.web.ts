@@ -24,9 +24,3 @@ export async function runAuthCommand<T>(key: string, action: () => Promise<T>): 
 }
 // The web SDK owns visibility-based refresh; no duplicate activity listener.
 export function watchAuthActivity(_active: (foreground: boolean) => void) { return () => undefined; }
-export function authCallbackUrl() {
-  if (typeof window === 'undefined' || !/^https?:$/.test(window.location.protocol)) {
-    throw new AuthOperationError('unavailable', 'Open TopicTrail in its browser page to continue.');
-  }
-  return `${window.location.origin}/auth/callback`;
-}

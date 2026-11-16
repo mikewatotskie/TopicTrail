@@ -7,7 +7,7 @@ export class BrowserStorageError extends Error {
 }
 
 export function assertOwnedDocumentPath(path: string): void {
-  if (!/^topictrail-idb:\/\/documents\/[a-z0-9]+(?:-[a-z0-9]+)*\.(?:pdf|docx)$/.test(path))
+  if (!/^topictrail-idb:\/\/documents\/[a-z0-9]+(?:-[a-z0-9]+)*\.(?:pdf|docx|pptx)$/.test(path))
     throw new BrowserStorageError('invalid', 'This document is outside TopicTrail browser storage.');
 }
 function storageFailure(error: unknown): Error {

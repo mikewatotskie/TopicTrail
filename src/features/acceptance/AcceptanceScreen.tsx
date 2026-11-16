@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, ScrollView, Text, UIManager, View } from 'react-native';
-import Constants from 'expo-constants';
-import { router } from 'expo-router';
+import { Modal, NativeModules, Platform, ScrollView, Text, UIManager, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { TTButton, TTCard, TTScreen } from '../../components';
 import { TTTypography } from '../../core/design/tokens';
@@ -34,12 +33,13 @@ function constantsText(config: unknown): string {
 type RecordEvent = (kind: NativeEventKind, data: Record<string, unknown>) => void;
 
 export function AcceptanceScreen() {
-  if (!__DEV__ || Platform.OS !== 'android' || Constants.expoConfig?.android?.package !== ACCEPTANCE_PACKAGE)
+  if (!__DEV__ || Platform.OS !== 'android' || NativeModules.TopicTrailTransfer?.packageName !== ACCEPTANCE_PACKAGE)
     return <AcceptanceUnavailable />;
   return <AcceptanceDiagnostics />;
 }
 
 function AcceptanceUnavailable() {
+  const router = useRouter();
   const { colors } = useColors();
   return <TTScreen><View style={{ padding: 16, gap: 16 }}>
     <Text accessibilityRole="header" style={[TTTypography.title, { color: colors.ink }]}>Acceptance unavailable</Text>
@@ -48,11 +48,12 @@ function AcceptanceUnavailable() {
 }
 
 function AcceptanceDiagnostics() {
+  const router = useRouter();
   const { colors } = useColors();
   // This is a read from the running binary, never a JS fallback or test marker.
   const [config] = useState(readNativeConfig);
   const gate = acceptanceGate({ development: __DEV__, platform: Platform.OS,
-    packageName: Constants.expoConfig?.android?.package, nativeConfig: config });
+    packageName: NativeModules.TopicTrailTransfer?.packageName, nativeConfig: config });
   const [fixture, setFixture] = useState<string | null>(null);
   const [productionCase, setProductionCase] = useState<(typeof PRODUCTION_CASES)[number] | null>(null);
   const [events, setEvents] = useState<AcceptanceNativeEvent[]>([]);
@@ -64,13 +65,13 @@ function AcceptanceDiagnostics() {
   }, []);
   useEffect(() => {
     console.info('TOPICTRAIL_ACCEPTANCE', JSON.stringify({ kind: 'native-constants',
-      packageName: Constants.expoConfig?.android?.package, constants: nativeConstants(config) ?? null }));
+      packageName: NativeModules.TopicTrailTransfer?.packageName, constants: nativeConstants(config) ?? null }));
   }, [config]);
   return <TTScreen><ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
     <Text accessibilityRole="header" style={[TTTypography.title, { color: colors.ink }]}>Android debug acceptance</Text>
     <Text style={[TTTypography.body, { color: colors.muted }]}>Separate component diagnostics. Local fixtures do not establish production Link Shield or document → Study → provider acceptance.</Text>
     <TTCard style={{ gap: 8 }}>
-      <Text selectable testID="acceptance-package" style={[TTTypography.caption, { color: colors.ink }]}>{Constants.expoConfig?.android?.package ?? 'Package unavailable'}</Text>
+      <Text selectable testID="acceptance-package" style={[TTTypography.caption, { color: colors.ink }]}>{NativeModules.TopicTrailTransfer?.packageName ?? 'Package unavailable'}</Text>
       <Text selectable testID="acceptance-native-constants" style={[TTTypography.smallStrong, { color: colors.ink }]}>Actual UIManager RNCWebView.Constants: {constantsText(config)}</Text>
       <Text accessibilityRole={gate.enabled ? undefined : 'alert'} style={[TTTypography.body, { color: colors.muted }]}>{gate.reason}</Text>
     </TTCard>

@@ -32,7 +32,7 @@ before(async () => {
   const boundaries: Record<string, string> = {
     'react-native': `export * from 'react-native-web';export const viewport={width:1440,left:0,right:0};export const useWindowDimensions=()=>({width:viewport.width,height:600,scale:1,fontScale:1});`,
     '@react-native-async-storage/async-storage': `export default {getItem:async()=>globalThis.__authVisualTheme(),setItem:async()=>{}};`,
-    'expo-router': `import {useEffect} from 'react';export const router={replace(p){globalThis.__authVisualRoutes.push(p)}};
+    'expo-router': `import {useEffect} from 'react';const scopedRouter={replace(p){globalThis.__authVisualRoutes.push(p)}};export function useRouter(){return scopedRouter;}export const router=new Proxy({}, {get(){throw Error('Global router unavailable');}});
       let focused=true;const listeners=new Set();export function setAuthTestFocused(next){if(next===focused)return;focused=next;listeners.forEach(listener=>listener());}
       export function useFocusEffect(effect){useEffect(()=>{let cleanup;const changed=()=>{cleanup?.();cleanup=focused?effect():undefined;};listeners.add(changed);changed();return()=>{listeners.delete(changed);cleanup?.();};},[effect]);}`,
     'expo-image': `import React from 'react';export const Image=({source,style})=>React.createElement('img',{src:source,style,'aria-hidden':true});`,

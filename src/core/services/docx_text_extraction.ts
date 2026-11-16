@@ -1,10 +1,10 @@
-import { File } from 'expo-file-system';
+import { readDocumentBytes } from './document_content';
 import { Document } from '../models/document';
 import { parseDocx } from './document_validation';
 
 export class DocxTextExtraction {
   static readonly instance = new DocxTextExtraction();
-  async extractParagraphs(document: Document): Promise<string[]> { return parseDocx(await new File(document.filePath).bytes()); }
+  async extractParagraphs(document: Document): Promise<string[]> { return parseDocx(await readDocumentBytes(document.filePath)); }
   async extractAllText(document: Document): Promise<string> { return (await this.extractParagraphs(document)).join('\n'); }
   async extractSectionText(document: Document, sectionIndex: number): Promise<string> {
     return (await this.extractParagraphs(document)).slice(sectionIndex * 20, (sectionIndex + 1) * 20).join('\n');

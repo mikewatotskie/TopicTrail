@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, type TextInputProps } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Platform, type TextInputProps } from 'react-native';
 import { useColors } from '../core/theme/ThemeContext';
 import { TTTypography } from '../core/design/tokens';
 import { TTIconButton } from './TTIconButton';
@@ -28,18 +28,20 @@ export function TTSearchInput({ hintText, placeholder, value, onChangeText, onCh
     {!!value && <TTIconButton icon="close" semanticLabel="Clear search" onPress={() => change('')} style={{ position: 'absolute', right: 0 }} />}
   </View>;
 }
-export function TTTextSelectionMenu({ onCopy, onSelectAll, onStudy, canStudy = true, testID }: {
-  onCopy: () => void; onSelectAll: () => void; onStudy: () => void; selectedText?: string; canStudy?: boolean; testID?: string;
+export function TTTextSelectionMenu({ onCopy, onSelectAll, onStudy, onNote, onNotePressIn, canNote = true, canStudy = true, testID }: {
+  onCopy: () => void; onSelectAll: () => void; onStudy: () => void; onNote?: () => void; onNotePressIn?:()=>void; canNote?:boolean; selectedText?: string; canStudy?: boolean; testID?: string;
 }) {
   const { colors } = useColors();
   return <View testID={testID} accessibilityLabel="Text selection actions" style={{ flexDirection: 'row', flexWrap: 'wrap',
-    padding: 8, gap: 4, marginHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-    {([{ label: 'Copy', action: onCopy, icon: 'copy' }, { label: 'Select All', action: onSelectAll }, { label: 'Study', action: onStudy, icon: 'studyAccent' }] as const).map(item =>
+    padding: 7, gap: 0, marginHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+    {([{ label: 'Copy', action: onCopy, icon: 'copy' }, { label: 'Select All', action: onSelectAll }, { label: 'Study', action: onStudy, icon: 'studyAccent' }, ...(onNote?[{label:'Note',action:onNote}]:[])] as const).map(item =>
       <TouchableOpacity key={item.label} accessibilityRole="button" accessibilityLabel={item.label}
-        accessibilityState={{ disabled: item.label === 'Study' && !canStudy }} disabled={item.label === 'Study' && !canStudy} onPress={item.action}
-        style={{ flexGrow: 1, minHeight: 48, padding: 8, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderRadius: 12,
-          backgroundColor: item.label === 'Study' ? colors.accent : 'transparent', opacity: item.label === 'Study' && !canStudy ? 0.55 : 1 }}>
-        {'icon' in item && <TTFigmaIcon name={item.icon} />}
+        {...(Platform.OS==='web'?{onMouseDown:(event:{preventDefault():void})=>{event.preventDefault();if(item.label==='Note')onNotePressIn?.();}}:{})}
+        onPressIn={item.label==='Note'?onNotePressIn:undefined}
+        accessibilityState={{ disabled: item.label === 'Study' && !canStudy || item.label === 'Note' && !canNote }} disabled={item.label === 'Study' && !canStudy || item.label === 'Note' && !canNote} onPress={item.action}
+        style={{ flexGrow: 1, minWidth: 48, minHeight: 48, paddingHorizontal: 6, paddingVertical: 8, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 12,
+          borderWidth: item.label === 'Study' ? 1 : 0, borderColor: colors.brand, backgroundColor: item.label === 'Study' ? colors.accent : 'transparent', opacity: item.label === 'Study' && !canStudy ? 0.55 : 1 }}>
+        {'icon' in item && <TTFigmaIcon name={item.icon as 'copy'|'studyAccent'} />}
         <Text style={[TTTypography.small, { color: item.label === 'Study' ? colors.onAccent : colors.ink }]}>{item.label}</Text>
       </TouchableOpacity>)}
   </View>;

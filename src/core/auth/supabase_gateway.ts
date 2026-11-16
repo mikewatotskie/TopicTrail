@@ -8,7 +8,7 @@ export interface SupabaseGatewayOptions {
   main: SupabaseAuthPort;
   temporary: () => SupabaseAuthPort;
   namespace: string;
-  callbackUrl: () => string;
+  emailCodesReady: boolean;
   command: <T>(action: () => Promise<T>) => Promise<T>;
   storageFailed?: () => boolean;
   watchStorageFailure?: (changed: () => void) => () => void;
@@ -34,6 +34,7 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
   const now = options.now ?? Date.now;
   let state: AuthState = { status: 'loading' };
   let epoch = 0;
+  let passwordSignIn: { uid: string; epoch: number; at: number } | undefined;
   let disposed = false;
   let busy = false;
   let refresh = 0;
@@ -50,7 +51,7 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
   function publish(next: AuthState) {
     if (disposed) return;
     const key = (value: AuthState) => value.status === 'account' ? `account:${value.account.uid}` : value.status;
-    if (key(state) !== key(next)) { epoch++; cancelRecovery(); }
+    if (key(state) !== key(next)) { epoch++; passwordSignIn = undefined; cancelRecovery(); }
     if (next.status === 'account') Object.freeze(next.account);
     state = Object.freeze(next);
     for (const listener of listeners) listener(state);
@@ -97,6 +98,7 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
     finally { release(auth); }
   }
   async function verify(params: VerifyOtpParams, purpose: 'signup' | 'recovery') {
+    requireEmailCodes();
     cancelRecovery();
     const flow = emailFlow;
     const started = epoch;
@@ -126,22 +128,35 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
     }
     return { email: email.trim(), token: code.trim(), type };
   }
+  function requireEmailCodes() {
+    if (!options.emailCodesReady) throw new AuthOperationError('unavailable', 'Email verification and password recovery are unavailable until the TopicTrail administrator finishes email setup.');
+  }
   const gateway: AuthGateway = {
+    emailCodesReady: options.emailCodesReady,
     getSnapshot: () => state,
     getSessionEpoch: () => epoch,
+    hasFreshTransferSignIn() {
+      if (disposed || state.status !== 'account' || !passwordSignIn ||
+          state.account.uid !== passwordSignIn.uid || epoch !== passwordSignIn.epoch) return false;
+      const elapsed = now() - passwordSignIn.at;
+      return elapsed >= 0 && elapsed < 10 * 60_000;
+    },
     subscribe(listener) { if (disposed) return () => undefined; listeners.add(listener); listener(state); return () => { listeners.delete(listener); }; },
     signIn(email, password) {
       return run(() => options.command(async () => {
         await assertGuest();
-        const { error } = await main.signInWithPassword({ email: email.trim(), password });
+        const { data, error } = await main.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
         await synchronize();
         if (state.status !== 'account') throw unavailable();
+        if (!data.user || data.user.id !== state.account.uid) throw stale();
+        passwordSignIn = { uid: state.account.uid, epoch, at: now() };
       }));
     },
     register(displayName, email, password) {
       return run(async () => {
         await assertGuest();
+        requireEmailCodes();
         if (!displayName.trim() || displayName.trim().length > 200) throw unavailable();
         const started = epoch;
         let dispatched = false;
@@ -149,7 +164,7 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
           await isolated(async auth => {
             dispatched = true;
             const { data, error } = await auth.signUp({ email: email.trim(), password,
-              options: { data: { display_name: displayName.trim() }, emailRedirectTo: options.callbackUrl() } });
+              options: { data: { display_name: displayName.trim() } } });
             if (error) throw error;
             if (!data.user?.id) throw new AuthOperationError('invalid_response', 'The registration result could not be confirmed.');
             if (data.session) {
@@ -164,7 +179,8 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
     },
     sendPasswordReset(email) {
       return run(() => isolated(async auth => {
-        const { error } = await auth.resetPasswordForEmail(email.trim(), { redirectTo: options.callbackUrl() });
+        requireEmailCodes();
+        const { error } = await auth.resetPasswordForEmail(email.trim());
         if (error && error.code !== 'user_not_found') throw error;
       }));
     },
@@ -180,16 +196,11 @@ export function createSupabaseAuthGateway(options: SupabaseGatewayOptions): Auth
     verification: {
       verifyEmail: (email, code) => run(() => verify(otp(email, code, 'signup'), 'signup')),
       resendConfirmation: email => run(() => isolated(async auth => {
-        const { error } = await auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: options.callbackUrl() } });
+        requireEmailCodes();
+        const { error } = await auth.resend({ type: 'signup', email: email.trim() });
         if (error && error.code !== 'user_not_found') throw error;
       })),
       beginRecovery: (email, code) => run(() => verify(otp(email, code, 'recovery'), 'recovery')),
-      verifyLink: (tokenHash, purpose) => run(async () => {
-        if (!/^[a-f0-9]{40,128}$/i.test(tokenHash) || (purpose !== 'signup' && purpose !== 'recovery')) {
-          throw new AuthOperationError('invalid_code', 'This email link is invalid. Request a new code.');
-        }
-        await verify({ token_hash: tokenHash, type: purpose }, purpose);
-      }),
       hasRecoverySession: () => !!recovery && !disposed && recovery.expires > now() && recovery.epoch === epoch,
       recoveryEmail: () => gateway.verification!.hasRecoverySession() ? recovery?.email ?? null : null,
       completeRecovery: password => run(async () => {

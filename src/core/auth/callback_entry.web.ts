@@ -1,7 +1,7 @@
-import { captureEmailCallback } from './email_callback';
+import { isLegacyEmailCallbackPath } from './email_callback';
 
-// Run before Expo Router. Do not put codes, hashes, bearer tokens or provider errors in router state.
-if (typeof window !== 'undefined' && window.location.pathname === '/auth/callback') {
-  captureEmailCallback(window.location.href);
+// Clean up old email links before Expo Router initializes. Verification now uses typed codes.
+if (typeof window !== 'undefined' && isLegacyEmailCallbackPath(window.location.pathname)) {
   window.history.replaceState(null, '', '/auth/callback');
 }
+export {};

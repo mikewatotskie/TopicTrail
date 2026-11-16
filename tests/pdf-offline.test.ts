@@ -29,6 +29,40 @@ test('offline reader ships every installed CMap/font/decoder/profile with matchi
   } finally { dom.window.close(); }
 });
 
+test('native Office viewer retains the offline shell and omits the PDF and OCR worker payloads', async () => {
+  const [full, office, ocrWorker, cmap] = await Promise.all([
+    readFile('assets/reader/viewer.html', 'utf8'),
+    readFile('assets/reader/office-viewer.html', 'utf8'),
+    readFile('assets/reader/ocr-worker.txt', 'utf8'),
+    readFile('node_modules/pdfjs-dist/cmaps/Adobe-Japan1-UCS2.bcmap'),
+  ]);
+  // The shell includes the CSP, Inter font, shared CSS, content root and license notices.
+  const executable = '</script><script>';
+  const fullScript = full.indexOf(executable);
+  assert.ok(fullScript > 0);
+  assert.equal(office.slice(0, office.indexOf(executable)), full.slice(0, fullScript));
+
+  // The final script can report a bootstrap failure even if the main viewer never binds.
+  for (const packaged of [office, full]) {
+    const dom = new JSDOM(packaged, { runScripts: 'outside-only' });
+    try {
+      const footer = [...dom.window.document.scripts].at(-1)!.textContent!;
+      dom.window.eval(footer);
+      assert.equal(dom.window.document.title, 'TopicTrail reader script unavailable');
+      Object.assign(dom.window, { TopicTrailReader: { connectNative() {} } });
+      dom.window.eval(footer);
+      assert.equal(dom.window.document.title, 'TopicTrail reader ready');
+    } finally { dom.window.close(); }
+  }
+
+  const ocrPayload = ocrWorker.match(/[A-Za-z0-9+/]{4096}/)?.[0];
+  assert.ok(ocrPayload, 'expected the bundled OCR worker to contain binary data');
+  for (const signature of [ocrPayload.slice(0, 512), cmap.toString('base64').slice(0, 512)]) {
+    assert.ok(full.includes(signature), 'full offline viewer must embed the payload');
+    assert.ok(!office.includes(signature), 'native Office viewer must omit the payload');
+  }
+});
+
 test('offline resource lookup returns fresh version-matched bytes and rejects unrecognized requests', async () => {
   assert.ok(existsSync('src/features/reader/pdf_offline.ts'), 'offline PDF resource lookup is missing');
   const modulePath = '../src/features/reader/pdf_offline';

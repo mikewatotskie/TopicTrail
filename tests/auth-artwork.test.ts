@@ -56,8 +56,8 @@ async function mounted(theme: 'light' | 'dark', run: (doc: Document) => void, wi
 test('light TTScreen paints the approved shared canvas through the actual theme consumer', async () => {
   await mounted('light', doc => {
     const content = doc.querySelector<HTMLElement>('[data-testid^="screen-content-"]')!;
-    assert.equal(content.style.backgroundColor, 'rgb(245, 245, 245)');
-    assert.equal(content.parentElement!.style.backgroundColor, 'rgb(245, 245, 245)');
+    assert.equal(content.style.backgroundColor, 'rgb(247, 249, 252)');
+    assert.equal(content.parentElement!.style.backgroundColor, 'rgb(247, 249, 252)');
   });
 });
 

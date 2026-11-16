@@ -1,0 +1,5 @@
+<resources>
+  <style name="Theme.App.SplashScreen" parent="TopicTrailSplashBase">
+    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+  </style>
+</resources>

@@ -9,7 +9,7 @@ const manifest = JSON.parse(readFileSync(new URL('./webview-download-policy.json
 const normalize = text => text.replaceAll('\r\n', '\n');
 const sha256 = text => createHash('sha256').update(normalize(text)).digest('hex');
 
-/** Three fixed files only; the explicit root is for bounded source fixtures in tests. */
+/** Hash-pinned WebView sources only; the explicit root is for bounded source fixtures in tests. */
 export function applyWebViewDownloadPolicy(packageRoot, { check = false } = {}) {
   const root = realpathSync(packageRoot);
   const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));

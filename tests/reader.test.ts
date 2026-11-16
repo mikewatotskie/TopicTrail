@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { nativeReaderSource, packagedReaderSource } from '../src/features/reader/native_reader_source';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { captureSelection, parseReaderMessage, buildSelectionMessage } from '../src/features/reader/selection';
@@ -41,4 +42,22 @@ test('overlong selection produces recoverable validation instead of a stale or f
   assert.deepEqual(buildSelectionMessage('x'.repeat(50001), 1), { type: 'selection-limit' });
   assert.deepEqual(buildSelectionMessage(' loops ', 1), { type: 'selection', text: ' loops ', page: 1 });
   assert.deepEqual(parseReaderMessage('{"type":"selection-limit"}'), { type: 'selection-limit' });
+});
+
+test('Android assigns an offline HTTPS origin to the original viewer bytes without navigating', () => {
+  const html = '<main>test - surrogate \uD83D\uDCD8 - 100%20</main>';
+  const source = nativeReaderSource(html, 'android');
+  assert.deepEqual(source, { html, baseUrl: 'https://appassets.androidplatform.net/topictrail/reader/' });
+  assert.equal('uri' in source, false);
+  assert.deepEqual(nativeReaderSource(html, 'ios'), { html });
+});
+
+test('packaged Android readers request only the exact app-owned routes with the native marker', () => {
+  for (const format of ['docx','pptx','pdf'] as const) {
+    const name = format === 'pdf' ? 'pdf.html' : 'office.html';
+    assert.deepEqual(packagedReaderSource(format), {
+      uri: 'https://appassets.androidplatform.net/topictrail/reader/' + name,
+      headers: { 'X-TopicTrail-Reader': '1' },
+    });
+  }
 });

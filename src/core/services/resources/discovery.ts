@@ -1,5 +1,5 @@
 import { prepareQuery } from './query';
-import { DiscoveryError, type DiscoveryResult, type DiscoveryService, type ProviderResult, type ResourceCandidate, type ResourceProvider, type SearchSelection } from './types';
+import { DiscoveryError, searchOrigin, type SearchOrigin, type DiscoveryResult, type DiscoveryService, type ProviderResult, type ResourceCandidate, type ResourceProvider, type ResourceSource, type SearchSelection } from './types';
 
 const fold = (value: string) => value.normalize('NFKC').toLocaleLowerCase('en-US');
 const words = (value: string) => new Set(fold(value).match(/[\p{L}\p{N}][\p{L}\p{N}+#.]*/gu) ?? []);
@@ -28,27 +28,26 @@ export class ResourceDiscoveryService implements DiscoveryService {
     this.now = options.now ?? (() => Date.now()); this.ttl = options.cacheTtlMs ?? 10 * 60 * 1000;
     this.capacity = options.maxCacheEntries ?? 20;
   }
-  async search(selection: SearchSelection, queryOverride?: string, signal = new AbortController().signal): Promise<DiscoveryResult> {
+  async search(selection: SearchOrigin | SearchSelection, queryOverride?: string, signal = new AbortController().signal, source: ResourceSource = 'wikipedia'): Promise<DiscoveryResult> {
+    const origin = searchOrigin(selection);
     const query = prepareQuery(selection.text, queryOverride);
     if (signal.aborted) throw new DiscoveryError('cancelled', 'Search stopped.');
-    const key = fold(query.query);
+    const key = JSON.stringify([source, query.query]);
     let cached = this.cache.get(key), fromCache = false;
     if (cached && cached.until <= this.now()) { this.cache.delete(key); cached = undefined; }
     let value: ProviderResult;
     if (cached) { value = cached.value; fromCache = true; this.cache.delete(key); this.cache.set(key, cached); }
     else {
-      value = { resources: [], discarded: 0 };
-      for (const provider of this.providers) {
-        const result = await provider.search(query.query, signal);
-        if (signal.aborted) throw new DiscoveryError('cancelled', 'Search stopped.');
-        value.resources.push(...result.resources); value.discarded += result.discarded;
-      }
-      value.resources = rank(value.resources, query.query);
+      const provider = this.providers.find(provider => provider.id === source);
+      if (!provider) throw new DiscoveryError('api', 'This search source is unavailable.');
+      const result = await provider.search(query.query, signal);
+      if (signal.aborted) throw new DiscoveryError('cancelled', 'Search stopped.');
+      value = { resources: rank(result.resources, query.query), discarded: result.discarded };
       // A student's explicit retry of an empty search must contact the provider.
       if (value.resources.length) this.cache.set(key, { until: this.now() + this.ttl, value });
       while (this.cache.size > Math.max(0, this.capacity)) this.cache.delete(this.cache.keys().next().value!);
     }
-    return { query, resources: value.resources.map(resource => ({ ...resource, attribution: { ...resource.attribution }, selectedTopic: selection.text,
-      documentId: selection.documentId, page: selection.page })), discarded: value.discarded, fromCache };
+    return { query, resources: value.resources.map(resource => ({ ...resource, ...(resource.attribution && { attribution: { ...resource.attribution } }), origin: {...origin},
+      ...(origin.kind === 'document' ? {selectedTopic: origin.text, documentId: origin.documentId, page: origin.page} : {}) })), discarded: value.discarded, fromCache };
   }
 }

@@ -40,7 +40,7 @@ before(async () => {
     'react-native': `export * from 'react-native-web';export const nativePolicy={config:{Constants:{topicTrailDownloadPolicyVersion:1}},throws:false,calls:[]};export const UIManager={getViewManagerConfig(name){nativePolicy.calls.push(name);if(nativePolicy.throws)throw Error('native constants unavailable');return nativePolicy.config}};`,
     'react-native-webview': `import React from 'react';export const web={props:null,stops:0,backs:0,mounted:0,closes:0};export const WebView=React.forwardRef((props,ref)=>{web.props=props;React.useImperativeHandle(ref,()=>({stopLoading(){web.stops++},goBack(){web.backs++}}));React.useEffect(()=>{web.mounted++;return()=>{web.mounted--}},[]);return React.createElement('div',{'data-testid':'native-webview-boundary'})});`,
     bookmarks: `import {BookmarkRepository} from '${bookmarks}';export const persistence={failWrite:false,failRead:false,metadata:null};export let bookmarkStore;export function resetStore(){persistence.failWrite=false;persistence.failRead=false;persistence.metadata=null;bookmarkStore=new BookmarkRepository({readMetadata:async()=>{if(persistence.failRead)throw Error('private read error');return persistence.metadata},writeMetadata:async value=>{if(persistence.failWrite)throw Error('private disk error');persistence.metadata=value}},()=>new Date('2026-10-27T12:00:00.000Z'))};resetStore();export const store=()=>bookmarkStore;`,
-    'expo-router': `export const router={canGoBack:()=>true,back(){},replace(){}};`,
+    'expo-router': `export const useRouter=()=>router;export const router={canGoBack:()=>true,back(){},replace(){}};`,
     'expo-linking': `export const opened=[]; export const launch={fail:false}; export async function openURL(url){if(launch.fail)throw Error('platform launch failed');opened.push(url)}`,
     'expo-image': `import React from 'react';export const Image=({source,style})=>React.createElement('img',{src:typeof source==='string'?source:undefined,style,alt:''});`,
     '@expo/vector-icons': `import React from 'react';export const Ionicons=()=>React.createElement('span');Ionicons.glyphMap={};`,
@@ -84,11 +84,11 @@ function result(request: Request, title = 'Iteration', discarded = 0): Discovery
 
 test('details offer local saving and source checks before an in-app website opens', async () => {
   await mounted(async doc => {
-    await press(doc, 'Search Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
+    await press(doc, 'Look up on Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
     await press(doc, 'View details for Iteration');
     assert.ok(doc.querySelector('[aria-label="Save resource"]'));
     assert.match(doc.body.textContent!, /Reputation not checked/);
-    assert.ok(doc.querySelector('[aria-label="Open in TopicTrail"]'));
+    assert.ok(doc.querySelector('[aria-label="Open website"]'));
   });
 });
 
@@ -115,8 +115,11 @@ async function standalone(kind: 'browser' | 'saved', run: (doc: globalThis.Docum
 
 test('supported details open a screened WebView and preserve exact selection and results on closing', async () => {
   await mounted(async doc => {
-    await press(doc, 'Search Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
-    await press(doc, 'View details for Iteration'); await press(doc, 'Open in TopicTrail');
+    await press(doc, 'Look up on Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
+    const drawer = doc.querySelector('[data-testid="resource-side-panel"]');
+    assert.ok(drawer?.querySelector('[aria-label="Close resource panel"]'));
+    assert.ok(drawer?.textContent?.includes('1 free resource'));
+    await press(doc, 'View details for Iteration'); await press(doc, 'Open website');
     assert.equal(ui.web.mounted, 1); assert.deepEqual(ui.web.props!.source, {uri:sourceUrl});
     const props = ui.web.props!;
     assert.deepEqual(props.originWhitelist, ['*']);
@@ -130,6 +133,7 @@ test('supported details open a screened WebView and preserve exact selection and
     await press(doc, 'Browser back'); assert.equal(ui.web.backs, 1);
     await press(doc, 'Close website'); assert.equal(ui.web.mounted, 0);
     await press(doc, 'Close resource details');
+    await press(doc, 'Edit topic');
     assert.equal(doc.querySelector('[data-testid="selected-passage"]')?.textContent, selection.text);
     assert.ok(doc.querySelector('[aria-label="View details for Iteration"]')); assert.equal(ui.requests.length, 1); assert.equal(ui.opened.length, 0);
   });
@@ -248,7 +252,7 @@ for (const event of ['onError','onHttpError','onRenderProcessGone','onContentPro
 
 test('save and unsave synchronize details, result cards and Saved without persisting the passage', async () => {
   await mounted(async doc => {
-    await press(doc, 'Search Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
+    await press(doc, 'Look up on Wikipedia'); await act(async () => ui.requests[0].resolve(result(ui.requests[0])));
     await press(doc, 'View details for Iteration');
     ui.persistence.failWrite = true; await press(doc, 'Save resource');
     assert.match(doc.body.textContent!, /Couldn’t save resource/); assert.equal(ui.store().getSnapshot().bookmarks.length, 0);
@@ -284,12 +288,44 @@ test('Saved searches title, source and topic, opens metadata details, and recove
   });
 });
 
+test('a DuckDuckGo citation saves once and reopens offline in the v10 bookmark format', async () => {
+  let persisted: string;
+  await mounted(async doc => {
+    await press(doc, 'Search with DuckDuckGo');
+    const request = ui.requests[0];
+    const response = result(request);
+    response.resources = [{ id: 'duckduckgo:iteration', title: 'Iteration', providerId: 'duckduckgo', providerName: 'Wikipedia',
+      url: sourceUrl, type: 'Instant Answer', description: 'Iteration repeats a process.', providerOrder: 0 }];
+    await act(async () => request.resolve(response));
+    assert.match(doc.body.textContent!, /DuckDuckGo Instant Answer · Wikipedia/);
+    await press(doc, 'View details for Iteration');
+    await press(doc, 'Save resource');
+    await press(doc, 'Already saved');
+    const bookmarks = ui.store().getSnapshot().bookmarks;
+    assert.equal(bookmarks.length, 1);
+    assert.equal(bookmarks[0].type, 'Article');
+    assert.equal(bookmarks[0].url, sourceUrl);
+    assert.equal(bookmarks[0].attribution, undefined);
+    persisted = ui.persistence.metadata!;
+  });
+  await standalone('saved', async doc => {
+    await press(doc, 'View details for Iteration');
+    assert.match(doc.body.textContent!, /DUCKDUCKGO INSTANT ANSWER/);
+    assert.match(doc.body.textContent!, /Iteration repeats a process/);
+    assert.match(doc.body.textContent!, /Wikipedia · en.wikipedia.org/);
+    assert.ok(doc.querySelector('[aria-label="Open cited source"]'));
+    assert.ok(doc.querySelector('[aria-label="Unsave resource"]'));
+    assert.equal(ui.requests.length, 0);
+    assert.deepEqual(ui.opened, []);
+  }, sourceUrl, 'android', false, () => { ui.persistence.metadata = persisted; });
+});
+
 test('Saved uses Light and Dark semantic surfaces with shared width and offline metadata copy', async () => {
   for (const dark of [false,true]) await standalone('saved', async doc => {
-    assert.match(doc.body.innerHTML, /max-width: 1440px/); assert.match(doc.body.textContent!, /Only link metadata/);
+    assert.match(doc.body.innerHTML, /max-width: 1440px/); assert.match(doc.body.textContent!, /Saved links open online/);
     const search = doc.querySelector<HTMLInputElement>('[aria-label="Search saved resources"]')!; assert.ok(search);
     const screen = doc.querySelector<HTMLElement>('[data-testid^="screen-content-"]'); assert.ok(screen);
-    assert.equal(screen.style.backgroundColor, dark ? 'rgb(11, 18, 32)' : 'rgb(245, 245, 245)');
+    assert.equal(screen.style.backgroundColor, dark ? 'rgb(11, 18, 32)' : 'rgb(247, 249, 252)');
   }, sourceUrl, 'android', dark);
 });
 
@@ -327,7 +363,6 @@ test('an unknown Saved destination stays neutral and requires confirmation befor
     await act(async () => { await ui.store().save({url:'https://example.org/learn',title:'Unknown source',providerId:'example',providerName:'Example',type:'Article'}); });
     await press(doc, 'View details for Unknown source');
     assert.match(doc.body.textContent!, /Unrecognized source/); assert.doesNotMatch(doc.body.textContent!, /guaranteed safe|credibility score/i);
-    assert.equal(doc.querySelector('[aria-label="Open in TopicTrail"]')?.getAttribute('aria-disabled'), 'true');
     await press(doc, 'Open website'); assert.equal(ui.opened.length, 0); assert.match(doc.body.textContent!, /Review external destination/);
     await press(doc, 'Continue in external browser'); assert.deepEqual(ui.opened, ['https://example.org/learn']);
   });

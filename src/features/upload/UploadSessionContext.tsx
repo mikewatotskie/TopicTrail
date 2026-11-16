@@ -1,5 +1,6 @@
 import React, {createContext,useCallback,useContext,useEffect,useState,useSyncExternalStore} from 'react';
 import {UploadSession} from './upload_session';
+import {useCloudLibrary} from '../library/CloudLibraryContext';
 interface OwnerContext {
   getOwner(): UploadSession;
   current(): UploadSession | null;
@@ -25,6 +26,15 @@ function productionOwner() {
   });
 }
 export function UploadSessionProvider({children,owner:injected}:{children:React.ReactNode;owner?:UploadSession}) {
+  const {state}=useCloudLibrary();
+  const [boundary,setBoundary]=useState({uid:state.identity?.uid??null,epoch:state.epoch,generation:0});
+  if(boundary.epoch!==state.epoch)setBoundary({uid:state.identity?.uid??null,epoch:state.epoch,
+    generation:boundary.uid!==null?boundary.generation+1:boundary.generation});
+  // Guest-to-account continuation retains its deliberate selection. Account-owned
+  // selections and results retire on logout, unavailability or identity changes.
+  return <UploadSessionLifetime key={boundary.generation} owner={injected}>{children}</UploadSessionLifetime>;
+}
+function UploadSessionLifetime({children,owner:injected}:{children:React.ReactNode;owner?:UploadSession}) {
   const [value]=useState<OwnerContext>(()=>{
     let owner=injected??null;
     let lifetime=0;

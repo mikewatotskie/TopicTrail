@@ -114,3 +114,12 @@ test('a hydration read failure keeps the document readable and leaves saved prog
   assert.deepEqual(session.pageRendered(position(1, 3)), { type: 'rendered' });
   assert.deepEqual(await store.read(docx), position(2, 3));
 });
+
+test('actual reader page events cannot add protocol fields to persisted cloud positions',async()=>{
+ const writes:unknown[]=[];
+ const session=new ReadingProgressSession({read:async()=>null,save:async(_doc,value)=>{writes.push(value);}}, {id:'presentation',format:DocumentFormat.PPTX});
+ await session.hydrate();
+ const event={type:'page',page:2,totalPages:4,hasText:true,loadId:'reader-generation'};
+ const result=session.pageRendered(event);assert.equal(result.type,'rendered');if(result.type==='rendered')await result.saved;
+ assert.deepEqual(writes,[{page:2,totalPages:4}]);
+});

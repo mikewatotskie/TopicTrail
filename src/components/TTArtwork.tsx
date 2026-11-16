@@ -5,12 +5,12 @@ import { useTheme } from '../core/theme/ThemeContext';
 
 // Exact exports from the approved file. Root SVG dimensions are retained, including blur bounds.
 const artwork = {
-  logo: [require('../assets/figma/4117e.svg'), require('../assets/figma/726ad.svg'), 80, 80],
+  logo: [require('../assets/figma/4117e.svg'), require('../assets/figma/e5746.svg'), 80, 80],
   trail: [require('../assets/figma/69b08.svg'), require('../assets/figma/26756.svg'), 82, 94],
-  mark: [require('../assets/figma/6a0a6.svg'), require('../assets/figma/9364e.svg'), 24, 24],
+  mark: [require('../assets/figma/ffe52.svg'), require('../assets/figma/fe30e.svg'), 24, 24],
   feature: [require('../assets/figma/52a20.svg'), require('../assets/figma/f95b0.svg'), 416, 322],
   quiet: [require('../assets/figma/97848.svg'), require('../assets/figma/4cb43.svg'), 368, 272],
-  header: [require('../assets/figma/a85e1.svg'), require('../assets/figma/9cdc2.svg'), 272, 184],
+  header: [require('../assets/figma/60f36.svg'), require('../assets/figma/86731.svg'), 272, 184],
   splashUpper: [require('../assets/figma/380ec.svg'), require('../assets/figma/e1135.svg'), 416, 322],
   splashLower: [require('../assets/figma/8af13.svg'), require('../assets/figma/47e6e.svg'), 416, 322],
   switchOff: [require('../assets/figma/83a20.svg'), require('../assets/figma/83a20.svg'), 52, 32],
@@ -33,18 +33,31 @@ export function TTAura({ kind = 'feature', style }: { kind?: 'feature' | 'quiet'
 }
 
 const icons = {
+  dockHome: [require('../assets/figma/47ca2.svg'), require('../assets/figma/47ca2.svg')],
+  dockLibrary: [require('../assets/figma/bc30c.svg'), require('../assets/figma/bc30c.svg')],
+  dockSaved: [require('../assets/figma/7a860.svg'), require('../assets/figma/7a860.svg')],
+  dockSettings: [require('../assets/figma/fd2d4.svg'), require('../assets/figma/fd2d4.svg')],
+  dockScan: [require('../assets/figma/a9fac.svg'), require('../assets/figma/a9fac.svg')],
+  scanPhoto: [require('../assets/figma/f0972.svg'), require('../assets/figma/f0972.svg')],
+  scanCamera: [require('../assets/figma/f8d07.svg'), require('../assets/figma/f8d07.svg')],
+  scanChevron: [require('../assets/figma/3637e.svg'), require('../assets/figma/3637e.svg')],
+  scanClose: [require('../assets/figma/c2fcd.svg'), require('../assets/figma/c2fcd.svg')],
+  settingsTab: [require('../assets/figma/c840a.svg'), require('../assets/figma/9448a.svg')],
+  savedTab: [require('../assets/figma/5b83f.svg'), require('../assets/figma/81f9c.svg')],
+  libraryTab: [require('../assets/figma/73f67.svg'), require('../assets/figma/05330.svg')],
+  homeTab: [require('../assets/figma/e71bb.svg'), require('../assets/figma/a4d32.svg')],
   home: [require('../assets/figma/67dba.svg'), require('../assets/figma/f8a25.svg')],
-  homeMuted: [require('../assets/figma/faa41.svg'), require('../assets/figma/5569a.svg')],
+  homeMuted: [require('../assets/figma/91de4.svg'), require('../assets/figma/a6484.svg')],
   book: [require('../assets/figma/97b40.svg'), require('../assets/figma/d7d4a.svg')],
-  bookMuted: [require('../assets/figma/bc30c.svg'), require('../assets/figma/980cc.svg')],
+  bookMuted: [require('../assets/figma/71181.svg'), require('../assets/figma/894d1.svg')],
   bookmark: [require('../assets/figma/26a9e.svg'), require('../assets/figma/13345.svg')],
-  bookmarkMuted: [require('../assets/figma/7a860.svg'), require('../assets/figma/8e384.svg')],
+  bookmarkMuted: [require('../assets/figma/1e20b.svg'), require('../assets/figma/3382e.svg')],
   settings: [require('../assets/figma/9b66b.svg'), require('../assets/figma/29dd9.svg')],
-  settingsMuted: [require('../assets/figma/fd2d4.svg'), require('../assets/figma/05615.svg')],
-  file: [require('../assets/figma/864ce.svg'), require('../assets/figma/4e7c1.svg')],
-  more: [require('../assets/figma/419aa.svg'), require('../assets/figma/b1d9a.svg')],
+  settingsMuted: [require('../assets/figma/84291.svg'), require('../assets/figma/21d2f.svg')],
+  file: [require('../assets/figma/1378b.svg'), require('../assets/figma/ab455.svg')],
+  more: [require('../assets/figma/06832.svg'), require('../assets/figma/47b75.svg')],
   search: [require('../assets/figma/0de34.svg'), require('../assets/figma/64236.svg')],
-  upload: [require('../assets/figma/10bf8.svg'), require('../assets/figma/a3722.svg')],
+  upload: [require('../assets/figma/ab932.svg'), require('../assets/figma/e284d.svg')],
   study: [require('../assets/figma/bb3b3.svg'), require('../assets/figma/17566.svg')],
   studyAccent: [require('../assets/figma/db7e2.svg'), require('../assets/figma/8198b.svg')],
   copy: [require('../assets/figma/547ad.svg'), require('../assets/figma/eb7ae.svg')],
@@ -55,9 +68,9 @@ const icons = {
   shield: [require('../assets/figma/dee25.svg'), require('../assets/figma/87427.svg')],
   close: [require('../assets/figma/c60cc.svg'), require('../assets/figma/a3a16.svg')],
 } as const;
-export function TTFigmaIcon({ name, slot = 24 }: { name: keyof typeof icons; slot?: number }) {
+export function TTFigmaIcon({ name, slot = 24, size = 24, tintColor }: { name: keyof typeof icons; slot?: number; size?: number; tintColor?: string }) {
   const { colorScheme } = useTheme();
   return <View pointerEvents="none" accessible={false} style={{ width: slot, height: slot, alignItems: 'center', justifyContent: 'center' }}>
-    <Image source={icons[name][colorScheme === 'dark' ? 1 : 0]} style={{ width: 24, height: 24 }} contentFit="contain" />
+    <Image source={icons[name][colorScheme === 'dark' ? 1 : 0]} tintColor={tintColor} style={{ width: size, height: size }} contentFit="contain" />
   </View>;
 }

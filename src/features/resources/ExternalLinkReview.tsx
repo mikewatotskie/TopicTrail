@@ -7,8 +7,7 @@ import { useColors } from '../../core/theme/ThemeContext';
 import { evaluateUrl } from '../../core/services/link_shield';
 import { LinkShieldNotice } from './LinkShieldNotice';
 
-export function ExternalLinkReview({ url, onCancel }: { url: string; onCancel: () => void }) {
-  const { colors } = useColors();
+export function ExternalBrowserAction({ url, label }: { url: string; label: string }) {
   const [error, setError] = useState('');
   const [opening, setOpening] = useState(false);
   const lock = useRef(false);
@@ -24,13 +23,21 @@ export function ExternalLinkReview({ url, onCancel }: { url: string; onCancel: (
     catch { if (active.current) setError('Could not open this link. Please try again or check your browser settings.'); }
     finally { lock.current = false; if (active.current) setOpening(false); }
   }
+  return <>
+    {!!error && <TTNoticeCard type="error" title="Link unavailable" message={error} />}
+    <TTButton label={label} disabled={opening || !assessment.canOpenExternal} onPress={() => void open()} />
+  </>;
+}
+
+export function ExternalLinkReview({ url, onCancel }: { url: string; onCancel: () => void }) {
+  const { colors } = useColors();
+  const assessment = evaluateUrl(url);
   return <TTCard testID="external-review" style={{ gap: 12 }}>
     <Text accessibilityRole="header" style={[TTTypography.section, { color: colors.ink }]}>Review external destination</Text>
     <Text selectable style={[TTTypography.small, { color: colors.link }]}>{assessment.normalizedUrl ?? 'Unsupported destination'}</Text>
     <LinkShieldNotice url={url} />
     <Text style={[TTTypography.small, { color: colors.muted }]}>Opening this link leaves TopicTrail and uses your browser or another app. Review the destination before continuing.</Text>
-    {!!error && <TTNoticeCard type="error" title="Link unavailable" message={error} />}
-    <TTButton label="Continue in external browser" disabled={opening || !assessment.canOpenExternal} onPress={() => void open()} />
+    <ExternalBrowserAction key={url} url={url} label="Continue in external browser" />
     <TTButton label="Cancel external opening" variant="secondary" onPress={onCancel} />
   </TTCard>;
 }

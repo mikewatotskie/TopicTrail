@@ -1,0 +1,260 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "runtime": "v24.20.0",
+  "generator": "generate.mjs",
+  "generatorSha256": "b32d18e45a746b65f75c7264a2288bd5a0fcb7c93446f8350e8bfcc1e8fcdc28",
+  "specSha256": "e1646dab48334e38bb5f00acbc36b4eebf53a977ea325dfb798b503935f589ba",
+  "canvasVersion": "1.0.13",
+  "pdfjsVersion": "6.4.299",
+  "font": "pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf",
+  "fontSha256": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f",
+  "fontLicense": "SIL Open Font License 1.1; see installed pdfjs-dist/standard_fonts/LICENSE_LIBERATION",
+  "color": {
+    "file": "color-24x16.jpg",
+    "bytes": 824,
+    "sha256": "3c5c2d6556037b209a0c8c059d6afd887fe41420ad5f1000decd789729ba2b79"
+  },
+  "pages": [
+    {
+      "id": "english-upright",
+      "sample": "english",
+      "variant": "upright",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "english-upright.png",
+          "bytes": 52200,
+          "sha256": "4a73449fed083d5150cef988469d3faff99682954db717a51a10a5147aac090d"
+        },
+        {
+          "file": "english-upright.jpg",
+          "bytes": 53332,
+          "sha256": "fcdd757dd168c7faada6e25291d2d4316530cba60504b105dcb80593a42d2b84"
+        },
+        {
+          "file": "english-upright.pdf",
+          "bytes": 53562,
+          "sha256": "7fe98e5deaa690bad8c422ab39b3f3aa6971c17877a9bf5bb28a70553162b3fa"
+        }
+      ]
+    },
+    {
+      "id": "english-rotated-90",
+      "sample": "english",
+      "variant": "rotated-90",
+      "width": 900,
+      "height": 1200,
+      "assets": [
+        {
+          "file": "english-rotated-90.png",
+          "bytes": 64936,
+          "sha256": "857355601f70b59c37e031d0cfb57cbb390c7b47257c823e1ae398c6a3e434bb"
+        },
+        {
+          "file": "english-rotated-90.jpg",
+          "bytes": 53336,
+          "sha256": "2d9b7846916e80f791d0bfeece70818e254e8b157ed17ba234f2694769c2be06"
+        },
+        {
+          "file": "english-rotated-90.pdf",
+          "bytes": 53566,
+          "sha256": "de409a2a51b71c201a31dcb068e0ada690f2a61e5a164182275fa2ba29ec5ba6"
+        }
+      ]
+    },
+    {
+      "id": "english-blurred",
+      "sample": "english",
+      "variant": "blurred",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "english-blurred.png",
+          "bytes": 68641,
+          "sha256": "2da302ab1b9e29b7580484e01535624292442b89350a09d063e1b06877226428"
+        },
+        {
+          "file": "english-blurred.jpg",
+          "bytes": 32326,
+          "sha256": "aefc8f316febc1959cc71a5064447d1532d341ab0035355375f6105634e99479"
+        },
+        {
+          "file": "english-blurred.pdf",
+          "bytes": 32556,
+          "sha256": "2070d74acefeee2e2467bf290c7063fad8ec19e69514d63ca59c34153caf2869"
+        }
+      ]
+    },
+    {
+      "id": "filipino-upright",
+      "sample": "filipino",
+      "variant": "upright",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "filipino-upright.png",
+          "bytes": 50959,
+          "sha256": "78022bdac0b32c68c0076a3fce0dd60e83fd466dda54fcabaf352af3d834af27"
+        },
+        {
+          "file": "filipino-upright.jpg",
+          "bytes": 59788,
+          "sha256": "ea165fd66fc0fb9a6aa229186be5e33870f491f830be9ac3a733146b17455f5f"
+        },
+        {
+          "file": "filipino-upright.pdf",
+          "bytes": 60018,
+          "sha256": "61799d312b5444eacd59ae3234d303c4e619fa17dbd4fd334886529447f04e2d"
+        }
+      ]
+    },
+    {
+      "id": "filipino-rotated-90",
+      "sample": "filipino",
+      "variant": "rotated-90",
+      "width": 900,
+      "height": 1200,
+      "assets": [
+        {
+          "file": "filipino-rotated-90.png",
+          "bytes": 71692,
+          "sha256": "93f6d9d50c7daac445c007bcb2a9db345b2c64194e4c0966860309ead2f4cbc4"
+        },
+        {
+          "file": "filipino-rotated-90.jpg",
+          "bytes": 59933,
+          "sha256": "2af86137999bd41f8e52d7950bd8993f2f654837db3e09d11f6de7cbd2f643a5"
+        },
+        {
+          "file": "filipino-rotated-90.pdf",
+          "bytes": 60163,
+          "sha256": "fa0600be270dc8ef25ae46a593d6d9400e137d6414d137f7bb0b85c68facf1e2"
+        }
+      ]
+    },
+    {
+      "id": "filipino-blurred",
+      "sample": "filipino",
+      "variant": "blurred",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "filipino-blurred.png",
+          "bytes": 71828,
+          "sha256": "4de441f75e45018b879b5761ffa7aeaa5a9461d1e34268c712d959a3c6c74802"
+        },
+        {
+          "file": "filipino-blurred.jpg",
+          "bytes": 35561,
+          "sha256": "b529d46aa4323eefdc9d9d04c6f1e3b88feb808a0eaac308a1494836f73e5bdb"
+        },
+        {
+          "file": "filipino-blurred.pdf",
+          "bytes": 35791,
+          "sha256": "d2f7364a1166e02a6c361b23c761b5fdac3fbac4745d480f297cf2296fdd9571"
+        }
+      ]
+    },
+    {
+      "id": "mixed-upright",
+      "sample": "mixed",
+      "variant": "upright",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "mixed-upright.png",
+          "bytes": 57468,
+          "sha256": "f6d43335fcba611211b4a57d4f5852f7c3592b86245ffd6c7d705b430e8c439d"
+        },
+        {
+          "file": "mixed-upright.jpg",
+          "bytes": 67903,
+          "sha256": "90717c42646ff46ff644a538299a9a2758f7a2d50ce42e9664842590314ab24b"
+        },
+        {
+          "file": "mixed-upright.pdf",
+          "bytes": 68133,
+          "sha256": "096d4eead253e45a7f7e91918c84b896c8d605d8717bff269de0c82ea81abc3f"
+        }
+      ]
+    },
+    {
+      "id": "mixed-rotated-90",
+      "sample": "mixed",
+      "variant": "rotated-90",
+      "width": 900,
+      "height": 1200,
+      "assets": [
+        {
+          "file": "mixed-rotated-90.png",
+          "bytes": 83244,
+          "sha256": "5eeeb5031218629d4349a3eea1233dacfe5f9ff62b9896fd3e1b2f4596d71075"
+        },
+        {
+          "file": "mixed-rotated-90.jpg",
+          "bytes": 68355,
+          "sha256": "e5b20dba5c640db693d473d53fa706b3e8668fd52ccfc276e252e276b980e1db"
+        },
+        {
+          "file": "mixed-rotated-90.pdf",
+          "bytes": 68585,
+          "sha256": "e6b0a95f507542ab2025a6f5f2e0c6bb5be9174ea62bf7c8f325573d77342020"
+        }
+      ]
+    },
+    {
+      "id": "mixed-blurred",
+      "sample": "mixed",
+      "variant": "blurred",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "mixed-blurred.png",
+          "bytes": 80776,
+          "sha256": "45c18d1e772e04175c0e56a6b302ccafdef1f2a2e4748e43d966ad74348e90b0"
+        },
+        {
+          "file": "mixed-blurred.jpg",
+          "bytes": 39765,
+          "sha256": "7da2fcb7c1da4ef1b7eec9b85b5a3a004d96dd23f6311b85b150ed85e5f7127b"
+        },
+        {
+          "file": "mixed-blurred.pdf",
+          "bytes": 39995,
+          "sha256": "d1700e3f0fafb9087c189b875c076686f7d67e9ce0f82b2903f69ba73596bf64"
+        }
+      ]
+    },
+    {
+      "id": "blank-upright",
+      "sample": "blank",
+      "variant": "upright",
+      "width": 1200,
+      "height": 900,
+      "assets": [
+        {
+          "file": "blank-upright.png",
+          "bytes": 6426,
+          "sha256": "b38a151e92591369c6530a34a1476ea0be360865a42ff312cd1253f06bba5907"
+        },
+        {
+          "file": "blank-upright.jpg",
+          "bytes": 7170,
+          "sha256": "ebf61ddab8fe29955fc69333b01267122e2b5c99638a2e1220d79fc57ed2ba2d"
+        },
+        {
+          "file": "blank-upright.pdf",
+          "bytes": 7398,
+          "sha256": "a377a7cf60b932cf12238050f2461a1094d9a8b7b60647b61a8048fcc49ccabf"
+        }
+      ]
+    }
+  ]
+}

@@ -1,19 +1,19 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { TTArtwork, TTAura, TTButton, TTCard, TTFeedback, TTFigmaIcon, TTNoticeCard, TTScreen } from '../../components';
 import { TTTypography } from '../../core/design/tokens';
 import { useResponsiveLayout } from '../../core/layout/useResponsiveLayout';
 import type { Document } from '../../core/models/document';
 import type { BookmarkInput } from '../../core/services/bookmarks/types';
-import { bookmarkStore } from '../../core/services/bookmarks/storage';
 import type { ImportActor } from '../../core/services/document_import_contract';
 import { DocumentStorage } from '../../core/services/document_storage';
 import { useColors } from '../../core/theme/ThemeContext';
 import { TTAppBar } from '../../navigation';
 import { useAuth } from '../auth/AuthContext';
 import { useBookmarks } from '../saved/useBookmarks';
-import { DemoCloudStory } from './DemoCloudStory';
+import { CloudLibraryNotice } from '../library/CloudLibraryNotice';
+import { useCloudLibrary } from '../library/CloudLibraryContext';
 import { demoSamples, type DemoSampleKind } from './demoSamples';
 import { importDemoSample } from './demoSampleSource';
 import { ensureDemoSample, findDemoSample, type DemoSampleImportPort } from './ensureDemoSample';
@@ -36,10 +36,15 @@ type Action = 'samples' | 'bookmark';
 type Notice = { type: 'error' | 'success'; title: string; message: string };
 
 export function DemoScreen() {
+  const {state:cloud}=useCloudLibrary();
+  return <DemoScreenContent key={cloud.epoch} />;
+}
+function DemoScreenContent() {
+  const router = useRouter();
   const { colors } = useColors();
   const { gutter, mode } = useResponsiveLayout();
   const { gateway } = useAuth();
-  const { bookmarks } = useBookmarks();
+  const { bookmarks,store } = useBookmarks();
   const [documents, setDocuments] = useState<ImportedSamples>({});
   const [notice, setNotice] = useState<Notice | null>(null);
   const [working, setWorking] = useState<Action | null>(null);
@@ -91,8 +96,8 @@ export function DemoScreen() {
     setWorking('bookmark');
     setNotice(null);
     try {
-      await bookmarkStore.save(exampleBookmark);
-      setNotice({ type: 'success', title: 'Example bookmark is ready', message: 'Find Iteration in Saved on this device.' });
+      await store.save(exampleBookmark);
+      setNotice({ type: 'success', title: 'Example bookmark is ready', message: 'Find Iteration in Saved. Signed-in accounts synchronize it when connected.' });
     } catch (error) {
       setNotice({ type: 'error', title: 'Could not save the example bookmark',
         message: error instanceof Error ? error.message : 'Try saving the bookmark again.' });
@@ -120,16 +125,16 @@ export function DemoScreen() {
           From syllabus to study session
         </Text>
         <Text style={[TTTypography.body, { color: colors.onBrand, maxWidth: 640 }]}>
-          Try the real reader and library with two practice files, then see a separate simulation of a two-device workflow.
+          Try the reader with two practice files. Sign in on two devices to transfer documents through your account’s cloud library.
         </Text>
       </TTCard>
 
       <TTCard padding={narrow ? 16 : 24} borderRadius={20} style={styles.section}>
         <View style={styles.heading}>
-          <Text style={[TTTypography.smallStrong, styles.badge, { color: colors.link, backgroundColor: colors.soft }]}>WORKING · LOCAL</Text>
+          <Text style={[TTTypography.smallStrong, styles.badge, { color: colors.link, backgroundColor: colors.soft }]}>READER AND LIBRARY</Text>
           <Text accessibilityRole="header" style={[TTTypography.heading, { color: colors.ink }]}>Try the reader and library</Text>
           <Text style={[TTTypography.body, { color: colors.muted }]}>
-            Add the two original practice files to My Syllabi. The PDF, DOCX, saved links, and reading positions live on this device.
+            Add the two original practice files to My Syllabi. Signed-in files, saved links and reading positions synchronize with your account when connected.
           </Text>
         </View>
         <TTButton label="Add sample files" variant="study" widthPolicy="responsiveAction"
@@ -169,19 +174,19 @@ export function DemoScreen() {
               isLoading={working === 'bookmark'} disabled={working === 'samples'} onPress={() => { void saveBookmark(); }} />
             <TTButton label="Open Saved" variant="secondary" widthPolicy="responsiveAction" onPress={() => router.navigate('/(tabs)/saved')} />
           </View>
-          <TTFeedback message={exampleSaved ? 'Iteration is saved on this device.' : ''} kind="off"
+          <TTFeedback message={exampleSaved ? 'Iteration is saved in the current library.' : ''} kind="off"
             style={[TTTypography.small, { color: colors.link }]} />
         </View>
         {notice && <TTNoticeCard type={notice.type} title={notice.title} message={notice.message} />}
       </TTCard>
 
-      <DemoCloudStory narrow={narrow} />
+      <CloudLibraryNotice />
 
       <TTCard padding={narrow ? 16 : 24} borderRadius={20} style={styles.heading}>
-        <Text style={[TTTypography.smallStrong, styles.badge, { color: colors.ink, backgroundColor: colors.canvas }]}>PENDING</Text>
-        <Text accessibilityRole="header" style={[TTTypography.section, { color: colors.ink }]}>Live cloud library and PowerPoint</Text>
+        <Text style={[TTTypography.smallStrong, styles.badge, { color: colors.ink, backgroundColor: colors.canvas }]}>CAPABILITIES</Text>
+        <Text accessibilityRole="header" style={[TTTypography.section, { color: colors.ink }]}>Cloud sync and document support</Text>
         <Text style={[TTTypography.body, { color: colors.muted }]}>
-          Live cloud storage, cross-device sync, and PPTX import are still pending.
+          Signed-in bookmarks, reading positions, names and Trash/Restore synchronize. PPTX opens a study view; PDF and photo OCR recognize printed English and Filipino locally, with possible errors. Scan previews enter the library only when saved as a PDF. To bring older files across, open the updated app on the device holding them and choose Copy device files to my account.
         </Text>
       </TTCard>
     </ScrollView>

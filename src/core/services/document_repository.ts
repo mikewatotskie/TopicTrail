@@ -11,6 +11,7 @@ export interface DocumentStoragePort {
   copyToDocuments(source: string, id: string, format: DocumentFormat): Promise<{ filePath: string; size: number }>;
   removeFile(path: string): Promise<void>;
   fileExists(path: string): Promise<boolean>;
+  ownsFile?(path: string): boolean;
 }
 export interface SaveDocumentInput { originalPath: string; title: string; format: DocumentFormat; attempt?: ImportAttempt }
 
@@ -30,7 +31,7 @@ export class DocumentRepository {
     }
     const recovered: Document[] = [];
     for (const doc of library.documents) {
-      if (!library.pendingDeletion.has(doc.id) || await this.port.fileExists(doc.filePath)) recovered.push(doc);
+      if (!library.pendingDeletion.has(doc.id) || this.port.ownsFile?.(doc.filePath) === false || await this.port.fileExists(doc.filePath)) recovered.push(doc);
     }
     library.documents = recovered.sort((a, b) => b.importedAt.getTime() - a.importedAt.getTime());
     return library;
@@ -39,6 +40,13 @@ export class DocumentRepository {
     if (!this.initialization) this.initialization = this.readLibrary().then(library => { this.library = library; })
       .catch(error => { this.initialization = undefined; throw error; });
     return this.initialization;
+  }
+  runStudyTransfer<T>(restore: () => Promise<T>): Promise<T> {
+    return this.mutate(async () => {
+      const result = await restore();
+      this.library = await this.readLibrary();
+      return result;
+    });
   }
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.pending.then(async () => { await this.initialize(); return operation(); });
@@ -128,6 +136,23 @@ export class DocumentRepository {
       if (!document.title.trim()) throw new Error('Enter a document title');
       const updated = existing.copyWith({ title: document.title.trim(), pageCount: document.pageCount, lastOpenedAt: document.lastOpenedAt });
       await this.persist(this.library.documents.map(d => d.id === document.id ? updated : d));
+    });
+  }
+  relinkMissingDocument(id: string, source: string, format: DocumentFormat, size: number, checkActive: () => void): Promise<void> {
+    return this.mutate(async () => {
+      checkActive();
+      const doc = this.library.documents.find(entry => entry.id === id);
+      if (!doc || doc.format !== format || (doc.fileSize !== undefined && doc.fileSize !== size)) {
+        throw new Error('Choose the original file with the same format and size.');
+      }
+      if (await this.port.fileExists(doc.filePath)) throw new Error('This document is already available.');
+      checkActive();
+      const key = 'relink-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      const copy = await this.port.copyToDocuments(source, key, format);
+      // An uncertain metadata write may already point at the copy. Preserve both files for recovery.
+      checkActive();
+      if (copy.size !== size) throw new Error('The selected file changed. Choose the original file again.');
+      await this.persist(this.library.documents.map(entry => entry.id === id ? doc.copyWith({ filePath: copy.filePath, fileSize: size }) : entry));
     });
   }
   deleteDocument(id: string): Promise<void> {

@@ -60,19 +60,19 @@ gradle.beforeProject { project ->
 
     // Use the cached Debug dependencies for a separately installable standalone app.
     def debug = android.buildTypes.getByName('debug')
-    debug.applicationIdSuffix = '.presentation'
+    android.defaultConfig.versionCode = 1
+    debug.applicationIdSuffix = '.acceptance.presentation'
+    debug.manifestPlaceholders.topictrailDebugScheme = 'topictrail-presentation'
     debug.debuggable = false
 
     def sourceManifest = project.file('src/main/AndroidManifest.xml').getText('UTF-8')
     def label = 'android:label="@string/app_name"'
-    def scheme = 'android:scheme="topictrail"'
-    if (sourceManifest.count(label) != 1 || sourceManifest.count(scheme) != 1) {
+    if (sourceManifest.count(label) != 1) {
       throw new GradleException('The presentation substitutions no longer match the main manifest.')
     }
     def manifest = new File(stage, 'AndroidManifest.xml')
     def contents = sourceManifest
       .replace(label, 'android:label="TopicTrail Presentation"')
-      .replace(scheme, 'android:scheme="topictrail-presentation"')
     if (!manifest.exists() || manifest.getText('UTF-8') != contents) {
       manifest.setText(contents, 'UTF-8')
     }

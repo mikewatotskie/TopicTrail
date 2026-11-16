@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "purpose": "Synthetic printed pages shared by browser, PDF and physical-phone OCR qualification. Ground truth is not a measured OCR result.",
+  "raster": { "width": 1200, "height": 900, "font": "Liberation Sans", "fontSize": 32, "lineHeight": 76, "left": 64, "top": 96, "jpegQuality": 95 },
+  "variants": ["upright", "rotated-90", "blurred"],
+  "samples": [
+    {
+      "id": "english",
+      "language": "English",
+      "lines": [
+        "PHOTOSYNTHESIS",
+        "Green plants use sunlight to make food.",
+        "Water + carbon dioxide -> glucose + oxygen.",
+        "Niño records 12 leaves; Ana records 8.",
+        "Check: 12 + 8 = 20 leaves."
+      ],
+      "studyPhrases": [
+        "Green plants use sunlight to make food.",
+        "Niño records 12 leaves; Ana records 8.\nCheck: 12 + 8 = 20 leaves."
+      ]
+    },
+    {
+      "id": "filipino",
+      "language": "Filipino",
+      "lines": [
+        "POTOSINTESIS",
+        "Gumagamit ng sikat ng araw ang mga halaman.",
+        "Tubig at carbon dioxide -> asukal at oxygen.",
+        "Nagmasid si Niño; nagtala si Doña Ana.",
+        "Tanong: Bakit mahalaga ang mga dahon?"
+      ],
+      "studyPhrases": [
+        "Gumagamit ng sikat ng araw ang mga halaman.",
+        "Nagmasid si Niño; nagtala si Doña Ana.\nTanong: Bakit mahalaga ang mga dahon?"
+      ]
+    },
+    {
+      "id": "mixed",
+      "language": "English + Filipino",
+      "lines": [
+        "PHOTOSYNTHESIS / POTOSINTESIS",
+        "Plants make food; gumagawa ng pagkain ang halaman.",
+        "Niño asks: \"Saan nanggagaling ang oxygen?\"",
+        "Answer: leaves (dahon), water, and sunlight.",
+        "Compare 12 leaves + 8 leaves = 20."
+      ],
+      "studyPhrases": [
+        "Plants make food; gumagawa ng pagkain ang halaman.",
+        "Niño asks: \"Saan nanggagaling ang oxygen?\"\nAnswer: leaves (dahon), water, and sunlight."
+      ]
+    }
+  ],
+  "blank": { "id": "blank", "expectedTranscript": "", "studyPhrases": [] },
+  "legacyV11": {
+    "engine": "tesseract-7-eng-1",
+    "languages": "eng",
+    "text": "  Green plants use sunlight.  \n\nNiño records 12 leaves; Doña Ana records 8.\n  Check: 12 + 8 = 20.  \n",
+    "confidence": 91.25,
+    "truncated": false,
+    "noteQuote": "Niño records 12 leaves; Doña Ana records 8.\n  Check: 12 + 8 = 20."
+  }
+}

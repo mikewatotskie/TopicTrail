@@ -24,7 +24,7 @@ export function AuthProfileFrame({ busy, onBack, children }: {
 }) {
   const { colors, colorScheme } = useTheme();
   const compact = useCompactProfile();
-  return <TTScreen variant="form">
+  return <TTScreen variant="form" backgroundColor={colors.authCanvas}>
     <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minWidth: 0 }}
       contentContainerStyle={{ paddingHorizontal: compact ? TTSpacing.space16 : TTSpacing.space32,
         paddingTop: TTSpacing.space24, paddingBottom: TTSpacing.space32, gap: TTSpacing.space24 }}>
@@ -82,8 +82,8 @@ export function AuthProfileDetails({ account, initials, busy, onResetPassword, o
         padding: TTSpacing.space16, borderRadius: TTRadius.radiusMd, backgroundColor: colors.soft }}>
         <View {...decorative}><TTFigmaIcon name="book" /></View>
         <View style={{ flex: 1, minWidth: 0, gap: TTSpacing.space6 }}>
-          <Text accessibilityRole="header" style={[TTTypography.bodyStrong, { color: colors.ink }]}>Your local library</Text>
-          <Text style={[TTTypography.small, { color: colors.ink }]}>Your syllabi and saved links stay on this device. Signing in or out does not change them.</Text>
+          <Text accessibilityRole="header" style={[TTTypography.bodyStrong, { color: colors.ink }]}>Your account library</Text>
+          <Text style={[TTTypography.small, { color: colors.ink }]}>Signed-in documents sync to this account. My Syllabi shows sync status and lets you copy existing device files while keeping the originals. Saved links, reading positions, names and Trash changes also sync. OCR text remains on this device.</Text>
         </View>
       </View>
     </TTCard>

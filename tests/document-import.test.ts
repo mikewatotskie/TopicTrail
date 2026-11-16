@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test, { before, afterEach } from 'node:test';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+import { DocumentFormat } from '../src/core/models/document';
 import { mkdtemp, mkdir, readFile, writeFile, copyFile, rename, rm, readdir } from 'node:fs/promises';
 import { existsSync, statSync, mkdirSync, unlinkSync, openSync, readSync, closeSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,11 +20,11 @@ const cacheURI = 'file:///experience-cache/';
 const documentURI = 'file:///experience-documents/';
 const providerURI = 'content://com.android.providers.downloads.documents/document/raw%3A42';
 before(async () => {
-  const result = await build({ stdin: { contents: `export {DocumentImportService} from './src/core/services/document_import'; export {DocumentStorage} from './src/core/services/document_storage';`, loader: 'ts', resolveDir: process.cwd() },
+  const result = await build({ stdin: { contents: `export {DocumentImportService} from './src/core/services/document_import'; export {DocumentStorage} from './src/core/services/document_storage'; export {accountFilePort} from './src/core/services/cloud/cache';`, loader: 'ts', resolveDir: process.cwd() },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'native-import-io', setup(builder) {
       const boundaries: Record<string, string> = {
-        'react-native': `export const Platform=io.Platform;`,
+        'react-native': `export const Platform=io.Platform; export const NativeModules=io.NativeModules;`,
         'expo-document-picker': `export const getDocumentAsync=options=>io.choose(options);`,
         'expo-file-system': `export const File=io.File,Directory=io.Directory,Paths=io.Paths,FileMode={ReadOnly:'r'};`,
       };
@@ -65,6 +67,12 @@ async function harness(bytes: Uint8Array, name = 'Course.pdf') {
   }
   class File {
     uri: string;
+    get name() { return this.uri.split('/').at(-1)!; }
+    create() { const fd = openSync(local(this.uri), 'wx'); closeSync(fd); }
+    async digest(algorithm: string) {
+      assert.equal(algorithm, 'SHA-256');
+      return createHash('sha256').update(await readFile(local(this.uri))).digest('hex');
+    }
     constructor(...parts: (string | { uri: string })[]) { this.uri = uriOf(parts); }
     get exists() { try { return existsSync(local(this.uri)); } catch { return false; } }
     get size() { try { return statSync(local(this.uri)).size; } catch { return null; } }
@@ -85,11 +93,12 @@ async function harness(bytes: Uint8Array, name = 'Course.pdf') {
     }
     async bytes() { if (state.rejectRead) throw new Error('Read permission denied'); return new Uint8Array(await readFile(local(this.uri))); }
     async text() { return readFile(local(this.uri), 'utf8'); }
-    async write(value: string) { await writeFile(local(this.uri), value); }
+    async write(value: string | Uint8Array) { await writeFile(local(this.uri), value); }
     async move(to: File) { await rename(local(this.uri), local(to.uri)); this.uri = to.uri; }
     delete() { unlinkSync(local(this.uri)); }
   }
-  const io = { File, Directory, Paths: { cache: { uri: cacheURI }, document: { uri: documentURI } }, Platform: { OS: 'android' },
+  const nativeModules: { TopicTrailTransfer?: object; TopicTrailStudyMetadata?: object } = {};
+  const io = { File, Directory, NativeModules: nativeModules, Paths: { cache: { uri: cacheURI }, document: { uri: documentURI } }, Platform: { OS: 'android' },
     choose: async (options: { copyToCacheDirectory: boolean }) => {
       state.options = options;
       return state.canceled ? { canceled: true, assets: null } : { canceled: false, assets: [{
@@ -99,9 +108,9 @@ async function harness(bytes: Uint8Array, name = 'Course.pdf') {
     } };
   const module = { exports: {} };
   new Function('require', 'module', 'exports', 'io', compiled)(createRequire(resolve('package.json')), module, module.exports, io);
-  const exports = module.exports as { DocumentImportService: new (store?: import('../src/core/services/document_storage_contract').DocumentStorageApi) => DocumentImportService; DocumentStorage: new (port?: undefined, policy?: 'disabled' | 'two_guest_successes_v1') => import('../src/core/services/document_repository').DocumentRepository };
+  const exports = module.exports as { accountFilePort: typeof import('../src/core/services/cloud/cache').accountFilePort; DocumentImportService: new (store?: import('../src/core/services/document_storage_contract').DocumentStorageApi) => DocumentImportService; DocumentStorage: new (port?: undefined, policy?: 'disabled' | 'two_guest_successes_v1') => import('../src/core/services/document_repository').DocumentRepository };
   const storage = (policy: 'disabled' | 'two_guest_successes_v1' = 'disabled') => new exports.DocumentStorage(undefined, policy);
-  return { service: new exports.DocumentImportService(), fresh: (store: import('../src/core/services/document_storage_contract').DocumentStorageApi) => new exports.DocumentImportService(store), storage, io, state, root, local, original };
+  return { accountFilePort: exports.accountFilePort, service: new exports.DocumentImportService(storage()), fresh: (store: import('../src/core/services/document_storage_contract').DocumentStorageApi) => new exports.DocumentImportService(store), storage, io, state, root, local, original };
 }
 const docx = () => zipSync({
   '[Content_Types].xml': strToU8('<Types><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'),
@@ -138,7 +147,7 @@ test('copy denial removes only partial app-cache output and publishes no documen
 });
 test('selection exceeding the known 50MiB limit is rejected before cache copying', async () => {
   const h = await harness(strToU8('%PDF-1.7\n')); h.state.reportedSize = 50 * 1024 * 1024 + 1;
-  await assert.rejects(h.service.pickDocument(), /50MB|50 MB/);
+  await assert.rejects(h.service.pickDocument(), /50 MiB/);
   assert.equal(h.state.copies.length, 0);
 });
 test('failed readability probe closes its descriptor and does not retain the temporary file', async () => {
@@ -234,3 +243,93 @@ test('owner serializes canceled native picker and fresh owner cannot lose new st
  owner.dispose();const replacement=make(h.fresh(h.storage()));replacement.ensure();await replacement.pick({kind:'guest'});const selected=replacement.getSnapshot().asset!;assert.ok(existsSync(h.local(selected.uri)));release();await first;assert.ok(existsSync(h.local(selected.uri)));assert.deepEqual(new Uint8Array(await readFile(h.original)),strToU8('%PDF-1.7\n'));assert.equal((await readdir(join(h.root,'cache','topictrail-imports'))).length,1);replacement.dispose();assert.equal((await readdir(join(h.root,'cache','topictrail-imports'))).length,0);
 });
 for(const [name,bytes] of [['Empty.pdf',new Uint8Array()],['Wrong.pdf',strToU8('invalid')],['Invalid.docx',strToU8('invalid')]] as const)test(`native invalid ${name} is typed reselect`,async()=>{const h=await harness(bytes,name);const selected=await h.service.pickDocument();assert.ok(selected);assert.equal((await h.service.importFile(selected.uri,selected.name)).code,'reselect');assert.ok(existsSync(h.original));});
+
+type PublishOriginal = (staged: string, destination: string, size: number, hash: string, allowIdentical: boolean) => Promise<void>;
+
+async function publishingFixture(bytes: Uint8Array, publish: PublishOriginal) {
+  const fixture = await harness(bytes);
+  const metadata = new Map<string, string>();
+  fixture.io.NativeModules.TopicTrailTransfer = { role: 'production', publishOriginal: publish };
+  fixture.io.NativeModules.TopicTrailStudyMetadata = {
+    read: async (keys: string[]) => keys.map(key => metadata.get(key) ?? null),
+    compareAndSet: async (keys: string[], before: (string | null)[], after: string[]) => {
+      if (keys.some((key, i) => (metadata.get(key) ?? null) !== before[i])) return false;
+      keys.forEach((key, i) => metadata.set(key, after[i]));
+      return true;
+    },
+  };
+  return { ...fixture, metadata };
+}
+
+const sampleOriginal = Buffer.from('%PDF-1.7\\nSynthetic original\\n%%EOF');
+const differentOriginal = Buffer.alloc(sampleOriginal.length, 77);
+const originalHash = createHash('sha256').update(sampleOriginal).digest('hex');
+const accountId = { project: 'abcdefghijklmnopqrst', uid: '10000000-2000-4000-8000-500000000000' };
+
+test('production Guest writes a distinct verified staging file and publishes before committing the document', async () => {
+  let stagedURI = '', destinationURI = '', calls = 0;
+  const h = await publishingFixture(sampleOriginal, async (staged, destination, size, hash, allowIdentical) => {
+    calls++;
+    stagedURI = staged;
+    destinationURI = documentURI + destination;
+    assert.match(destination, /^documents\/[a-z0-9-]+\.pdf$/);
+    assert.ok(staged.startsWith(documentURI + 'documents/incoming-'));
+    assert.notEqual(staged, destinationURI);
+    assert.deepEqual(await readFile(h.local(staged)), sampleOriginal);
+    assert.equal(size, sampleOriginal.length);
+    assert.equal(hash, originalHash);
+    assert.equal(allowIdentical, false);
+    assert.equal(h.metadata.size, 0);
+    await copyFile(h.local(staged), h.local(destinationURI), constants.COPYFILE_EXCL);
+  });
+  const saved = await h.storage().saveDocument({ originalPath: providerURI, title: 'Original', format: DocumentFormat.PDF });
+  assert.equal(calls, 1);
+  assert.equal(saved.filePath, destinationURI);
+  assert.deepEqual(await readFile(h.local(destinationURI)), sampleOriginal);
+  assert.equal(existsSync(h.local(stagedURI)), false);
+  assert.equal((await h.storage().getAllDocuments())[0].id, saved.id);
+});
+
+for (const owner of ['Guest', 'account'] as const) {
+  for (const failure of ['conflicting destination', 'lost acknowledgement'] as const) {
+    test('production ' + owner + ' preserves the destination and removes its staging file after ' + failure, async () => {
+      let stagedURI = '', finalURI = '', calls = 0;
+      const winner = failure === 'conflicting destination' ? differentOriginal : sampleOriginal;
+      const h = await publishingFixture(sampleOriginal, async (staged, destination, size, hash, allowIdentical) => {
+        calls++;
+        stagedURI = staged;
+        finalURI = documentURI + destination;
+        assert.notEqual(stagedURI, finalURI);
+        assert.deepEqual(await readFile(h.local(stagedURI)), sampleOriginal);
+        assert.equal(size, sampleOriginal.length);
+        assert.equal(hash, originalHash);
+        assert.equal(allowIdentical, owner === 'account');
+        // The native boundary either saw another publisher win, or installed these bytes and lost its reply.
+        await writeFile(h.local(finalURI), winner, { flag: 'wx' });
+        throw Error(failure);
+      });
+      if (owner === 'Guest') {
+        await assert.rejects(h.storage().saveDocument({ originalPath: providerURI, title: 'Guest file', format: DocumentFormat.PDF }), new RegExp(failure));
+      } else {
+        const port = h.accountFilePort(accountId);
+        const id = 'doc-' + accountId.uid + '-original';
+        const write = { path: port.path(id, DocumentFormat.PDF), bytes: sampleOriginal, hash: originalHash };
+        await assert.rejects(port.commit(0, 'account metadata', write), new RegExp(failure));
+        assert.equal(finalURI, documentURI + 'topictrail-cloud-v1/' + accountId.project + '/' + accountId.uid + '/' + id + '.pdf');
+        assert.equal((await port.readState()).revision, 0);
+        if (failure === 'lost acknowledgement') {
+          assert.equal(await port.commit(0, 'account metadata', write), true);
+          assert.equal((await port.readState()).revision, 1);
+        } else {
+          await assert.rejects(port.commit(0, 'account metadata', write), /conflict/i);
+          assert.equal((await port.readState()).revision, 0);
+        }
+      }
+      assert.equal(calls, 1, 'retry must use the immutable destination and its verified digest');
+      assert.equal(existsSync(h.local(stagedURI)), false);
+      assert.deepEqual(await readFile(h.local(finalURI)), winner);
+      assert.deepEqual(await readFile(h.original), sampleOriginal);
+      if (owner === 'Guest') assert.equal(h.metadata.size, 0);
+    });
+  }
+}

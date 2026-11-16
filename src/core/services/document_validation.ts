@@ -1,5 +1,7 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { parsePptx } from './pptx_parser';
+import { normalizeOfficeEntryName } from './pptx_archive';
 import { DocumentFormat } from '../models/document';
 
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -16,12 +18,17 @@ function parseXml(xml: string): XmlNode[] {
 
 /** Port of the Flutter ZIP + word/document.xml paragraph algorithm, with bounded XML expansion. */
 export function parseDocx(bytes: Uint8Array, maxXmlBytes = MAX_XML_BYTES): string[] {
+  if (bytes.byteLength > MAX_FILE_SIZE_BYTES) throw new Error('DOCX exceeds the 50 MiB size limit.');
   const wanted = new Set(['[Content_Types].xml', 'word/document.xml']);
+  const seen = new Set<string>();
   const sizes = new Map<string, number>();
   let expanded = 0;
   let entries: Record<string, Uint8Array>;
   try {
     entries = unzipSync(bytes, { filter: entry => {
+      const name = normalizeOfficeEntryName(entry.name).toLowerCase();
+      if (seen.has(name) || seen.size >= 4096) throw new Error('Duplicate archive entry or DOCX entry limit exceeded');
+      seen.add(name);
       if (!wanted.has(entry.name)) return false;
       if (sizes.has(entry.name) || (entry.compression === 0 && entry.size !== entry.originalSize)) {
         throw new Error('DOCX XML entry size is inconsistent');
@@ -78,12 +85,13 @@ export function parseDocx(bytes: Uint8Array, maxXmlBytes = MAX_XML_BYTES): strin
 
 export function validateDocument(name: string, bytes: Uint8Array, size = bytes.length): DocumentFormat {
   if (!Number.isFinite(size) || size <= 0 || !bytes.length) throw new Error('The selected file is empty');
-  if (size > MAX_FILE_SIZE_BYTES || bytes.length > MAX_FILE_SIZE_BYTES) throw new Error('File size exceeds the 50MB limit');
+  if (size > MAX_FILE_SIZE_BYTES || bytes.length > MAX_FILE_SIZE_BYTES) throw new Error('File size exceeds the 50 MiB limit');
   const extension = name.split('.').pop()?.toLowerCase();
   if (extension === 'pdf') {
     if (strFromU8(bytes.subarray(0, 5)) !== '%PDF-') throw new Error('File content does not match a PDF document');
     return DocumentFormat.PDF;
   }
   if (extension === 'docx') { parseDocx(bytes); return DocumentFormat.DOCX; }
-  throw new Error('Unsupported file format. Only PDF and DOCX are allowed.');
+  if (extension === 'pptx') { parsePptx(bytes); return DocumentFormat.PPTX; }
+  throw new Error('Unsupported file format. Only PDF, DOCX and PPTX are allowed.');
 }

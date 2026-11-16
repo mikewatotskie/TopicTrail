@@ -63,14 +63,15 @@ function BrowserSession({ url, title, onClose }: { url: string; title: string; o
   function back() { if (!stopped.current && canGoBack && web.current) web.current.goBack(); else onClose(); }
   return <Modal visible animationType="slide" onRequestClose={back}>
     <TTScreen>
-      <View style={{ backgroundColor: colors.brand, padding: 12, gap: 8 }}>
+      <View style={{ backgroundColor: colors.canvas, paddingHorizontal: 12, paddingVertical: 4, gap: 4 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <TTButton label={canGoBack && (state === 'loading' || state === 'ready') ? 'Back' : 'Resources'} semanticLabel="Browser back" onPress={back} />
-          {supported && initial.canOpenInApp && <TTButton label="Reload" onPress={retry} />}
-          <TTButton label="Close" semanticLabel="Close website" onPress={onClose} />
+          <TTButton label={canGoBack && (state === 'loading' || state === 'ready') ? 'Back' : 'Resources'} variant="ghost" semanticLabel="Browser back" onPress={back} />
+          {supported && initial.canOpenInApp && <TTButton label="Reload" style={{ marginLeft: 'auto' }} variant="ghost" onPress={retry} />}
+          <TTButton label="Close" variant="ghost" semanticLabel="Close website" onPress={onClose} />
         </View>
-        <Text numberOfLines={2} style={[TTTypography.smallStrong, { color: colors.onBrand }]}>{title}</Text>
-        <Text selectable numberOfLines={2} style={[TTTypography.caption, { color: colors.onBrand }]}>{evaluateUrl(currentUrl).hostname ?? 'Unsupported destination'}</Text>
+        <Text selectable numberOfLines={2} style={[TTTypography.smallStrong, { color: colors.link, paddingHorizontal: 4, paddingVertical: 8 }]}>
+          {title} · {evaluateUrl(currentUrl).hostname ?? 'Unsupported destination'}
+        </Text>
       </View>
       {!initial.canOpenInApp || !supported ? <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <TTCard style={{ gap: 12 }}>
@@ -81,7 +82,7 @@ function BrowserSession({ url, title, onClose }: { url: string; title: string; o
         <LinkShieldNotice url={url} />
         {initial.canOpenExternal && <ExternalLinkReview url={url} onCancel={onClose} />}
       </ScrollView> : <>
-        <View style={{ flex: 1, minHeight: 180, margin: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', backgroundColor: colors.surface }}>
+        <View style={{ flex: 1, minHeight: 0, margin: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface }}>
           {state === 'loading' && <View style={{ padding: 16, gap: 12 }}>
             <Text accessibilityLiveRegion="polite" style={[TTTypography.title, { color: colors.ink }]}>Opening {initial.sourceName ?? title}…</Text>
             <ActivityIndicator color={colors.link} accessibilityLabel="Loading website" />
@@ -130,7 +131,7 @@ function BrowserSession({ url, title, onClose }: { url: string; title: string; o
         </View>
         <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
           <Text style={[TTTypography.caption, { color: colors.muted }]}>JavaScript is off. Some pages may not work. Website content is online and is not downloaded for offline reading.</Text>
-          {state !== 'review' && <TTButton label="Open in browser" variant="study" onPress={() => {
+          {state !== 'review' && <TTButton label="Open in browser" onPress={() => {
             stopped.current = true; clearTimer(); web.current?.stopLoading(); setReview(currentUrl); setState('review');
           }} />}
         </View>

@@ -1,3 +1,4 @@
+import { buildOfflineOcr } from './bundle-ocr.mjs';
 import { build, transform } from 'esbuild';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -81,33 +82,49 @@ async function topicTrailDecoderModule(name) {
 }
 
 export async function bundleReader() {
-  const worker = await buildOfflineWorker();
-  const reader = await build({ entryPoints: ['src/features/reader/reader_web.ts'], bundle: true,
-    format: 'iife', platform: 'browser', target: 'chrome108', minify: true, write: false,
-    define: { PDF_WORKER_SOURCE: JSON.stringify(worker.code) } });
+  const [worker, ocr] = await Promise.all([buildOfflineWorker(), buildOfflineOcr()]);
+  const buildReader = (pdfWorker, ocrWorker) => build({
+    entryPoints: ['src/features/reader/reader_web.ts'], bundle: true, format: 'iife',
+    platform: 'browser', target: 'chrome108', minify: true, write: false,
+    define: { PDF_WORKER_SOURCE: JSON.stringify(pdfWorker), OCR_WORKER_SOURCE: JSON.stringify(ocrWorker) },
+  });
+  const [reader, officeReader] = await Promise.all([
+    buildReader(worker.code, ocr.workerSource),
+    buildReader('', ''),
+  ]);
   const viewerCss = await readFile(require.resolve('pdfjs-dist/web/pdf_viewer.css'), 'utf8');
   const textCss = viewerCss.slice(viewerCss.indexOf('.textLayer {'), viewerCss.indexOf('.textLayerImages {'));
   const css = await transform(textCss, { loader: 'css', target: 'chrome108', minify: true });
-  const customCss = 'html{overflow-y:scroll}body{margin:0;padding:16px;background:#F7F9FC;color:#13213B}#content{position:relative;margin:0 auto;max-width:100%;box-sizing:border-box}#content.pdf{max-width:none;background:white}#content.docx{max-width:688px;border:1px solid #718096;border-radius:12px;padding:16px;background:white;font-family:Inter,sans-serif;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}p{margin:0 0 16px}canvas{display:block}.textLayer{z-index:1}[data-theme=dark] body{background:#0B1220;color:#F5F7FC}[data-theme=dark] #content.docx{background:#111D32;border-color:#627897}::selection{background:#B4CBFF}';
+  const customCss = 'html{overflow-y:scroll}body{margin:0;padding:8px;background:#F7F9FC;color:#13213B}#content{position:relative;margin:0 auto;max-width:100%;box-sizing:border-box}#content.pdf{max-width:none;background:white}#content.docx,#content.pptx{max-width:688px;border:1px solid #718096;border-radius:12px;padding:16px;background:white;font-family:Inter,sans-serif;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}p{margin:0 0 16px}canvas{display:block}.textLayer{z-index:1}[data-theme=dark] body{background:#0B1220;color:#F5F7FC}[data-theme=dark] #content.docx,[data-theme=dark] #content.pptx{background:#111D32;border-color:#627897}.pptx img{max-width:100%;height:auto}.pptx table{display:block;overflow-x:auto;white-space:normal}.pptx details{margin-top:16px}.ocr-result{position:relative;z-index:2;background:#fff;color:#13213B;border:1px solid #718096;padding:16px;font:16px/1.5 Inter,sans-serif}.ocr-text{white-space:pre-wrap;overflow-wrap:anywhere}[data-theme=dark] .ocr-result{background:#111D32;color:#F5F7FC}::selection{background:#FFE680;color:#13213B}.textLayer ::selection{background:rgba(255,204,0,.38);color:transparent}';
   const font = (await readFile('src/assets/fonts/Inter-Regular.ttf')).toString('base64');
-  const notices = { 'PDFJS-LICENSE.txt': await readFile(require.resolve('pdfjs-dist/LICENSE'), 'utf8') };
+  const notices = { ...ocr.licenses, 'PDFJS-LICENSE.txt': await readFile(require.resolve('pdfjs-dist/LICENSE'), 'utf8') };
   for (const directory of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
     for (const name of await readdir(resolve(pdfRoot, directory))) {
       if (name.startsWith('LICENSE')) notices[directory + '-' + name + '.txt'] = await readFile(resolve(pdfRoot, directory, name), 'utf8');
     }
   }
-  // Metro only imports viewer.html, so notices must be carried in that asset too.
+  // Each standalone Metro asset carries its own offline styling and notices.
   const noticeJson = JSON.stringify(notices).replaceAll('<', '\\u003c');
-  const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'wasm-unsafe-eval\' blob:; worker-src blob:; style-src \'unsafe-inline\'; font-src data: blob:; img-src data: blob:; connect-src \'none\'"><style>@font-face{font-family:Inter;src:url(data:font/ttf;base64,' + font + ')}' + css.code + customCss + '</style></head><body><main id="content" aria-label="Syllabus document"></main><script>' + reader.outputFiles[0].text.replace(/<\/script/gi, '<\\/script') + '</script></body></html>';
-  const outputHtml = html.replace('</main><script>', '</main><script type="application/json" id="pdfjs-third-party-notices">' + noticeJson + '</script><script>');
+  function renderHtml(bundle) {
+    // This footer reports script startup through the WebView title, independently of the message bridge.
+    const startupCheck = '<script>document.title = typeof window.TopicTrailReader?.connectNative === "function" ? "TopicTrail reader ready" : "TopicTrail reader script unavailable";</script>';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'wasm-unsafe-eval\' blob:; worker-src blob:; style-src \'unsafe-inline\'; font-src data: blob:; img-src data: blob:; connect-src \'none\'"><style>@font-face{font-family:Inter;src:url(data:font/ttf;base64,' + font + ')}' + css.code + customCss + '</style></head><body><main id="content" aria-label="Syllabus document"></main><script type="application/json" id="pdfjs-third-party-notices">' + noticeJson + '</script><script>' + bundle.outputFiles[0].text.replace(/<\/script/gi, '<\\/script') + '</script>' + startupCheck + '</body></html>';
+  }
+  const outputHtml = renderHtml(reader);
+  const officeHtml = renderHtml(officeReader);
   await mkdir('assets/reader/licenses', { recursive: true });
   await writeFile('assets/reader/viewer.html', outputHtml);
+  await writeFile('assets/reader/office-viewer.html', officeHtml);
+  await writeFile('assets/reader/ocr-worker.txt', ocr.workerSource);
   await writeFile('assets/reader/PDFJS-LICENSE.txt', await readFile(require.resolve('pdfjs-dist/LICENSE')));
   for (const directory of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
     for (const name of await readdir(resolve(pdfRoot, directory))) {
       if (name.startsWith('LICENSE')) await writeFile('assets/reader/licenses/' + directory + '-' + name + '.txt', await readFile(resolve(pdfRoot, directory, name)));
     }
   }
+  for (const [name, text] of Object.entries(ocr.licenses)) await writeFile('assets/reader/licenses/' + name, text);
+  worker.manifest.ocr = ocr.manifest;
+  worker.manifest.licenses.push(...Object.keys(ocr.licenses));
   await writeFile('assets/reader/manifest.json', JSON.stringify(worker.manifest, null, 2) + '\n');
   console.log('Bundled offline reader: ' + Buffer.byteLength(outputHtml).toLocaleString('en-US') + ' bytes');
 }

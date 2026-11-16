@@ -46,4 +46,3 @@ export function watchAuthActivity(active: (foreground: boolean) => void) {
   const subscription = AppState.addEventListener('change', state => active(state === 'active'));
   return () => subscription.remove();
 }
-export function authCallbackUrl() { return 'topictrail://auth/callback'; }

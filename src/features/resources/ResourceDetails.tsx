@@ -7,7 +7,6 @@ import { TTTypography } from '../../core/design/tokens';
 import { useColors } from '../../core/theme/ThemeContext';
 import { evaluateUrl } from '../../core/services/link_shield';
 import { savedDate, useBookmarkAction, type ResourceMetadata } from '../saved/useBookmarks';
-import { SelectedPassage } from './SelectedPassage';
 import { LinkShieldNotice } from './LinkShieldNotice';
 import { ResourceBrowser } from './ResourceBrowser';
 import { ExternalLinkReview } from './ExternalLinkReview';
@@ -17,11 +16,15 @@ export function ResourceDetails({ resource, query, onClose }: { resource: Resour
   const [error, setError] = useState('');
   const [opening, setOpening] = useState(false);
   const [browser, setBrowser] = useState(false);
+  const [showAttribution, setShowAttribution] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const bookmark = useBookmarkAction(resource, query);
+  const instantAnswer = resource.providerId === 'duckduckgo';
   const assessment = evaluateUrl(resource.url);
   const topic = query ?? ('topic' in resource ? resource.topic : undefined);
   const attribution = resource.attribution;
+  const page = 'page' in resource ? resource.page : undefined;
+  const passage = 'selectedTopic' in resource ? resource.selectedTopic : undefined;
   const openingLock = useRef(false);
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -38,41 +41,43 @@ export function ResourceDetails({ resource, query, onClose }: { resource: Resour
     finally { openingLock.current = false; if (active.current) setOpening(false); }
   }
   return <Modal visible animationType="slide" onRequestClose={onClose}>
-    <TTScreen variant="form"><TTAppBar title="Resource details" leading={<TTIconButton icon={<TTFigmaIcon name="back" />}
+    <TTScreen variant="form"><TTAppBar title="Resource details" leading={<TTIconButton icon={<TTFigmaIcon name="back" tintColor={colors.link} />}
       semanticLabel="Close resource details" onPress={onClose} />} />
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}>
         <Text accessibilityRole="header" style={[TTTypography.heading, { color: colors.ink }]}>{resource.title}</Text>
-        <Text style={[TTTypography.body, { color: colors.muted }]}>{resource.providerName} · {resource.type}</Text>
-        <Text selectable style={[TTTypography.small, { color: colors.link }]}>{resource.url}</Text>
-        <LinkShieldNotice url={resource.url} />
-        {!!bookmark.error && <TTNoticeCard type="error" title="Saved resources" message={bookmark.error} />}
-        <TTCard style={{ gap: 8 }}>
-          <Text style={[TTTypography.section, { color: colors.ink }]}>Source excerpt</Text>
-          <Text selectable style={[TTTypography.body, { color: colors.ink }]}>{resource.description || 'Description unavailable from this source.'}</Text>
-          <Text style={[TTTypography.caption, { color: colors.muted }]}>Shortened excerpt supplied by {resource.providerName}; it has not been rewritten by TopicTrail.</Text>
-        </TTCard>
-        {!!topic && <Text style={[TTTypography.small, { color: colors.muted }]}>Found for topic query: {topic}</Text>}
-        {'selectedTopic' in resource && <SelectedPassage text={resource.selectedTopic} page={resource.page} />}
-        {bookmark.saved && <Text style={[TTTypography.small, { color: colors.muted }]}>Saved {savedDate(bookmark.saved.savedAt)}</Text>}
-        <Text style={[TTTypography.caption, { color: colors.muted }]}>Saved resources keep link metadata on this device, not an offline copy of the website.</Text>
-        {attribution && <TTCard style={{ gap: 8 }}>
-          <Text style={[TTTypography.section, { color: colors.ink }]}>Source attribution</Text>
-          <Text style={[TTTypography.body, { color: colors.ink }]}>{attribution.author}</Text>
-          <Text style={[TTTypography.small, { color: colors.muted }]}>{attribution.licenseName}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <TTButton label="View source" variant="ghost" disabled={opening} onPress={() => void open(attribution.sourceUrl)} />
-            <TTButton label="View license" variant="ghost" disabled={opening} onPress={() => void open(attribution.licenseUrl)} />
-            {!!attribution.revisionUrl && <TTButton label="View revision" variant="ghost" disabled={opening} onPress={() => void open(attribution.revisionUrl!)} />}
-          </View>
+        <Text style={[TTTypography.body, { color: colors.muted }]}>{[resource.providerName, assessment.hostname].filter(Boolean).join(' · ')}</Text>
+        <Text style={[TTTypography.caption, { color: colors.link }]}>{instantAnswer ? 'DUCKDUCKGO INSTANT ANSWER' : resource.type.toUpperCase()}{resource.providerId === 'wikipedia' ? '     FREE ACCESS' : ''}</Text>
+        <Text selectable style={[TTTypography.body, { color: colors.muted }]}>{resource.description || 'Description unavailable from this source.'}</Text>
+        {!!(topic || passage) && <TTCard padding={12} style={{ gap: 8 }}>
+          <Text style={[TTTypography.caption, { color: colors.link }]}>{passage ? 'SYLLABUS TOPIC' : 'SEARCH TOPIC'}</Text>
+          <Text selectable style={[TTTypography.bodyStrong, { color: colors.link }]}>{topic || passage}{page ? ` · Page / section ${page}` : ''}</Text>
+          {!!passage && passage !== topic && <Text selectable style={[TTTypography.small, { color: colors.muted }]}>{passage}</Text>}
         </TTCard>}
-        <TTButton label={Platform.OS === 'web' ? 'Review website' : 'Open in TopicTrail'} variant="study" disabled={!assessment.canOpenInApp} onPress={() => setBrowser(true)} />
-        <TTButton label={bookmark.error ? (bookmark.saved ? 'Retry removal' : 'Retry save') : bookmark.saved ? 'Unsave resource' : 'Save resource'} variant="secondary"
-          isLoading={bookmark.pending} disabled={!bookmark.available || bookmark.snapshot.status === 'loading'} onPress={() => void bookmark.toggle()} />
-        <Text style={[TTTypography.small, { color: colors.muted }]}>Open website asks your device to open the link externally. Your browser or an associated app may handle it. Review the source before using it in your studies.</Text>
+        <LinkShieldNotice url={resource.url} />
+        <TTButton label={attribution ? 'Source attribution' : 'Source information'} variant="ghost"
+          style={{ alignSelf: 'flex-start' }} accessibilityState={{ expanded: showAttribution }} onPress={() => setShowAttribution(value => !value)} />
+        {showAttribution && <TTCard padding={12} style={{ gap: 8 }}>
+          <Text selectable style={[TTTypography.small, { color: colors.link }]}>{resource.url}</Text>
+          {attribution && <>
+            <Text style={[TTTypography.small, { color: colors.muted }]}>{attribution.author} · {attribution.licenseName}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+              <TTButton label="View source" variant="ghost" disabled={opening} onPress={() => void open(attribution.sourceUrl)} />
+              <TTButton label="View license" variant="ghost" disabled={opening} onPress={() => void open(attribution.licenseUrl)} />
+              {!!attribution.revisionUrl && <TTButton label="View revision" variant="ghost" disabled={opening} onPress={() => void open(attribution.revisionUrl!)} />}
+            </View>
+          </>}
+        </TTCard>}
+        {bookmark.saved && <Text style={[TTTypography.small, { color: colors.muted }]}>Saved {savedDate(bookmark.saved.savedAt)}</Text>}
+        {!!bookmark.error && <TTNoticeCard type="error" title="Saved resources" message={bookmark.error} />}
         {!!error && <TTNoticeCard type="error" title="Link unavailable" message={error} />}
         {review && <ExternalLinkReview key={review} url={review} onCancel={() => setReview(null)} />}
-        <TTButton label="Open website" variant="secondary" disabled={opening} onPress={() => void open(resource.url)} />
-        <TTButton label="Back to results" variant="secondary" onPress={onClose} />
+        <View style={{ marginTop: 'auto', gap: 8, paddingTop: 8 }}>
+          <TTButton label={instantAnswer ? 'Open cited source' : 'Open website'} disabled={opening || !assessment.canOpenExternal}
+            onPress={() => assessment.canOpenInApp ? setBrowser(true) : void open(resource.url)} />
+          <TTButton label={bookmark.alreadySaved ? 'Already saved' : bookmark.error ? (bookmark.saved ? 'Retry removal' : 'Retry save') : bookmark.saved ? 'Unsave resource' : 'Save resource'} variant="secondary"
+            isLoading={bookmark.pending} disabled={bookmark.alreadySaved || !bookmark.available || bookmark.snapshot.status === 'loading'} onPress={() => void bookmark.toggle()} />
+          {showAttribution && assessment.canOpenInApp && Platform.OS !== 'web' && <TTButton label="Open in external browser" variant="ghost" disabled={opening} onPress={() => void open(resource.url)} />}
+        </View>
       </ScrollView>
     </TTScreen>
     {browser && <ResourceBrowser url={resource.url} title={resource.title} onClose={() => setBrowser(false)} />}

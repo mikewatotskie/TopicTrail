@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import type { SupabaseConfiguration } from './supabase_config';
 import { guardedSessionStorage } from './session_storage';
 import { createSupabaseAuthGateway } from './supabase_gateway';
-import { authCallbackUrl, runAuthCommand, sessionStorage, watchAuthActivity } from './supabase_platform';
+import { runAuthCommand, sessionStorage, watchAuthActivity } from './supabase_platform';
 import { createAuthTransport } from './supabase_transport';
+import type { AuthOperation } from './supabase_diagnostics';
+import { createCloudSessionReader } from './cloud_session';
 let temporarySequence = 0;
 let retiringStorage: Promise<unknown> = Promise.resolve();
 export function createSupabaseSession(config: SupabaseConfiguration) {
@@ -14,7 +16,9 @@ export function createSupabaseSession(config: SupabaseConfiguration) {
     async setItem(key, value) { await predecessor; return sessionStorage.setItem(key, value); },
     async removeItem(key) { await predecessor; return sessionStorage.removeItem(key); },
   });
-  const transport = createAuthTransport();
+  // Recovery uses a fresh isolated SDK client for every attempt. Share only cooldown times.
+  const manualCooldowns = new Map<AuthOperation, number>();
+  const transport = createAuthTransport(undefined, manualCooldowns);
   const client = createClient(config.url, config.publishableKey, { global: { fetch: transport.fetch }, auth: {
     storageKey: key, storage: { ...persistence.storage,
       // SDK2.119's internal initial-session observers do not catch storage-read rejections.
@@ -38,16 +42,16 @@ export function createSupabaseSession(config: SupabaseConfiguration) {
     });
     void activityWork.catch(() => undefined);
   });
-  const gateway = createSupabaseAuthGateway({ main: transport.wrap(client.auth), namespace: config.namespace,
+  const gateway = createSupabaseAuthGateway({ main: transport.wrap(client.auth), namespace: config.namespace, emailCodesReady: config.emailCodesReady === true,
     temporary: () => {
-      const temporaryTransport = createAuthTransport();
+      const temporaryTransport = createAuthTransport(undefined, manualCooldowns);
       const temporary = createClient(config.url, config.publishableKey, { global: { fetch: temporaryTransport.fetch }, auth: {
         storageKey: `${key}.email.${++temporarySequence}`, persistSession: false, autoRefreshToken: false,
         detectSessionInUrl: false, debug: false,
       } });
       return temporaryTransport.wrap(temporary.auth);
     },
-    callbackUrl: authCallbackUrl, command: action => runAuthCommand(key, action), storageFailed: persistence.hasFailed,
+    command: action => runAuthCommand(key, action), storageFailed: persistence.hasFailed,
     watchStorageFailure: persistence.subscribeFailure,
     cleanup() {
       disposed = true; activityRevision++; detachActivity();
@@ -55,5 +59,8 @@ export function createSupabaseSession(config: SupabaseConfiguration) {
       retiringStorage = Promise.all([persistence.close(), stopped]);
     },
   });
+  gateway.getCloudSession = createCloudSessionReader({ namespace: config.namespace,
+    snapshot: gateway.getSnapshot, epoch: () => gateway.getSessionEpoch?.() ?? 0,
+    unavailable: () => disposed || persistence.hasFailed(), session: () => client.auth.getSession() });
   return gateway;
 }

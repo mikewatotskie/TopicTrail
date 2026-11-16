@@ -34,7 +34,7 @@ export function AuthAccessLayout({ title, description, backLabel, onBack, busy =
   const maxWidth = Math.min(1140, Math.max(0, availableWidth - 2 * gutter));
   const gap = wide ? Math.min(96, 48 + (availableWidth - 1024) * 48 / 416) : 24;
   const logoSize = wide ? 44 : 32;
-  return <TTScreen variant="form" style={{ maxWidth }}>
+  return <TTScreen variant="form" backgroundColor={colors.authCanvas} style={{ maxWidth }}>
     <KeyboardAvoidingView style={{ flex: 1, minHeight: 0, minWidth: 0 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minWidth: 0 }}
         contentContainerStyle={{ paddingTop: wide ? 32 : 24, paddingBottom: 32, minWidth: 0 }}>

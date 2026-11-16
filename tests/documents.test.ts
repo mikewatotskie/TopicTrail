@@ -8,6 +8,8 @@ import { Document, DocumentFormat } from '../src/core/models/document';
 import { parseDocx, validateDocument } from '../src/core/services/document_validation';
 import { DocumentRepository, type DocumentStoragePort } from '../src/core/services/document_repository';
 import { isOwnedDocumentUri } from '../src/core/services/file_ownership';
+import { checkRelinkFingerprint } from '../src/core/services/annotations/relink';
+import { sha256 } from '../src/core/services/cloud/sha256';
 
 const contentTypes = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
 const temporaryRoots: string[] = [];
@@ -30,6 +32,12 @@ test('DOCX preserves runs, XML entities, tabs, breaks and table paragraphs', () 
 });
 test('arbitrary ZIP is not accepted as DOCX', () => {
   assert.throws(() => parseDocx(zipSync({ 'notes.txt': strToU8('Hello') })), /DOCX/);
+});
+test('DOCX validates the names of unused archive entries before reading XML', () => {
+  const parts = { '[Content_Types].xml': strToU8(contentTypes), 'word/document.xml': strToU8('<document/>') };
+  assert.throws(() => parseDocx(zipSync({ ...parts, '/absolute.png': Uint8Array.of(0) })), /path/i);
+  assert.throws(() => parseDocx(zipSync({ ...parts, 'WORD/DOCUMENT.XML': strToU8('<document/>') })), /duplicate/i);
+  assert.deepEqual(parseDocx(zipSync({ ...parts, 'word/media/image.png': Uint8Array.of(0) })), []);
 });
 test('corrupt XML and document types with entities are rejected', () => {
   assert.throws(() => parseDocx(docx('<x:p><x:t>broken</x:p>')), /XML|DOCX/);
@@ -88,6 +96,50 @@ test('owned-file guard accepts Expo trailing-slash directory URIs and rejects es
   assert.equal(isOwnedDocumentUri('file:///data/app/documents/../private.json', 'file:///data/app/documents'), false);
   assert.equal(isOwnedDocumentUri('file:///data/app/documents/%2e%2e/private.json', 'file:///data/app/documents'), false);
   assert.equal(isOwnedDocumentUri('file:///data/app/documents/nested%2Fprivate.json', 'file:///data/app/documents'), false);
+  assert.equal(isOwnedDocumentUri('file:///data/app/documents/nested%252Ffile.pdf', 'file:///data/app/documents'), false);
+  assert.equal(isOwnedDocumentUri('content://picker/selected.pdf', 'file:///data/app/documents'), false);
+});
+
+test('an unowned legacy entry survives recovery and relinks without spending a Guest import or losing its ID', async () => {
+  const doc = new Document('original', 'Course', DocumentFormat.PDF, 'file:///elsewhere/course.pdf', new Date(), 12, 3);
+  const receipt = { attemptId: 'before-recovery', documentId: doc.id };
+  let metadata = JSON.stringify({ version: 3, documents: [{ ...doc.toJson(), pendingDeletion: true }], guestImports: [receipt], importAttempts: [receipt] });
+  let copies = 0;
+  const port: DocumentStoragePort = {
+    readMetadata: async () => metadata,
+    writeMetadata: async value => { metadata = value; },
+    ownsFile: path => path.startsWith('file:///owned/'),
+    fileExists: async path => path.startsWith('file:///owned/'),
+    copyToDocuments: async (source, key, format) => {
+      assert.equal(source, 'picker-selection'); copies++;
+      return { filePath: 'file:///owned/' + key + '.' + format, size: 12 };
+    },
+    removeFile: async () => { assert.fail('The original must be preserved'); },
+  };
+  const store = new DocumentRepository(port, 'two_guest_successes_v1');
+  assert.equal((await store.getAllDocuments()).length, 1);
+  await assert.rejects(store.relinkMissingDocument(doc.id, 'picker-selection', DocumentFormat.DOCX, 12, () => {}), /format/);
+  await assert.rejects(store.relinkMissingDocument(doc.id, 'picker-selection', DocumentFormat.PDF, 11, () => {}), /size/);
+  await assert.rejects(store.relinkMissingDocument(doc.id, 'picker-selection', DocumentFormat.PDF, 12, () => { throw Error('Session changed'); }), /Session changed/);
+  assert.equal(copies, 0);
+  await store.relinkMissingDocument(doc.id, 'picker-selection', DocumentFormat.PDF, 12, () => {});
+  const saved = await new DocumentRepository(port).getDocument(doc.id);
+  assert.equal(saved?.pageCount, 3);
+  assert.equal(saved?.importedAt.getTime(), doc.importedAt.getTime());
+  assert.ok(saved?.filePath.startsWith('file:///owned/relink-'));
+  assert.equal((await store.lookupGuestImportOutcome(receipt.attemptId)).kind, 'committed');
+  assert.deepEqual(await store.getGuestAllowance(), { kind: 'ready', used: 1, remaining: 1 });
+  await assert.rejects(store.relinkMissingDocument(doc.id, 'picker-selection', DocumentFormat.PDF, 12, () => {}), /already available/);
+  assert.equal(copies, 1);
+});
+
+test('relink verifies the selected original against the document fingerprints retained in notes and drafts', () => {
+  const original = strToU8('%PDF-study A');
+  const other = strToU8('%PDF-study B');
+  const attachment = { documentId: 'study', documentHash: sha256(original) };
+  assert.doesNotThrow(() => checkRelinkFingerprint('study', original, [attachment]));
+  assert.throws(() => checkRelinkFingerprint('study', other, [attachment]), /original linked to your notes/);
+  assert.doesNotThrow(() => checkRelinkFingerprint('separate-document', other, [attachment]));
 });
 
 async function fixture() {

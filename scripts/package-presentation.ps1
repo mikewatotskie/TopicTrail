@@ -1,43 +1,32 @@
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$deliverables = Join-Path $project 'deliverables\presentation-20261110'
-$archivePath = Join-Path $deliverables 'TopicTrail-Web-Presentation-20261110.zip'
-if (Test-Path -LiteralPath $archivePath) { throw 'The presentation archive already exists; preserve the completed deliverable.' }
-$required = @('dist-presentation\index.html', 'START-PRESENTATION.cmd',
-  'scripts\presentation-server.mjs', 'scripts\start-presentation.ps1',
-  'deliverables\presentation-20261110\PRESENTATION-RUNBOOK.md',
-  'deliverables\presentation-20261110\VERIFIED-STATUS.md')
-foreach ($relative in $required) {
-  if (-not (Test-Path -LiteralPath (Join-Path $project $relative) -PathType Leaf)) { throw "Missing package input: $relative" }
+$release = Join-Path $project 'deliverables\duckduckgo-v11\web'
+$archivePath = Join-Path $release 'TopicTrail-Local-Web-v11.zip'
+if (Test-Path -LiteralPath $archivePath) { throw 'The completed archive already exists. Preserve it and use a new release directory for future builds.' }
+& node (Join-Path $PSScriptRoot 'presentation-server.mjs') --check-manifest
+if ($LASTEXITCODE -ne 0) { throw 'The export differs from its reviewed public manifest.' }
+
+$packageScripts = Join-Path $release 'scripts'
+[IO.Directory]::CreateDirectory($packageScripts) | Out-Null
+$scriptFiles = @('presentation-server.mjs', 'presentation-public-files.json', 'start-presentation.ps1')
+foreach ($name in $scriptFiles) {
+  Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $packageScripts $name)
 }
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$archive = [IO.Compression.ZipFile]::Open($archivePath, [IO.Compression.ZipArchiveMode]::Create)
+$launcher = (Get-Content -Raw -LiteralPath (Join-Path $project 'START-PRESENTATION.cmd')).Replace('start-presentation.ps1"', 'start-presentation.ps1" -Packaged')
+[IO.File]::WriteAllText((Join-Path $release 'START-PRESENTATION.cmd'), $launcher, [Text.Encoding]::ASCII)
+$publicFiles = Get-Content -Raw -LiteralPath (Join-Path $packageScripts 'presentation-public-files.json') | ConvertFrom-Json
+$names = @('START-PRESENTATION.cmd') + @($scriptFiles | ForEach-Object { 'scripts/' + $_ }) + @($publicFiles | ForEach-Object { 'dist-presentation/' + $_ })
+$tempArchive = Join-Path $release ('.partial-' + [guid]::NewGuid().ToString('N') + '.zip')
+$tar = (Get-Command tar.exe -ErrorAction Stop).Source
 try {
-  $entries = @()
-  foreach ($directory in @('dist-presentation','deliverables\presentation-20261110\sample-files')) {
-    $entries += Get-ChildItem -LiteralPath (Join-Path $project $directory) -Recurse -File |
-      ForEach-Object { [pscustomobject]@{ file=$_.FullName; name=$_.FullName.Substring($project.Length+1).Replace('\','/') } }
-  }
-  foreach ($relative in $required | Where-Object { $_ -ne 'dist-presentation\index.html' }) {
-    $entries += [pscustomobject]@{ file=(Join-Path $project $relative); name=$relative.Replace('\','/') }
-  }
-  foreach ($entry in $entries) {
-    [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$entry.file,$entry.name,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
-  }
-} finally { $archive.Dispose() }
-$check = [IO.Compression.ZipFile]::OpenRead($archivePath)
-try {
-  if (-not $check.GetEntry('START-PRESENTATION.cmd') -or -not $check.GetEntry('dist-presentation/index.html')) {
-    throw 'The archive is missing its launcher or web entry.'
-  }
-  if (@($check.Entries | Where-Object { $_.FullName -match '(^|/)\.env|keystore|before-inventory|node_modules' }).Count) {
-    # Expo public asset paths can legitimately retain a node_modules path; only secret inputs are disallowed.
-    if (@($check.Entries | Where-Object { $_.FullName -match '(^|/)\.env|keystore|before-inventory' }).Count) {
-      throw 'Unexpected private input in web package.'
-    }
-  }
-  $receipt = [pscustomobject]@{ archive=$archivePath; entries=$check.Entries.Count;
-    bytes=(Get-Item -LiteralPath $archivePath).Length; sha256=(Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash }
-} finally { $check.Dispose() }
-$receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $deliverables 'web-package.json') -Encoding utf8
+  $names | & $tar -acf $tempArchive -C $release -T -
+  if ($LASTEXITCODE -ne 0) { throw 'Windows could not archive the approved export files.' }
+  $archived = @(& $tar -tf $tempArchive)
+  if ($LASTEXITCODE -ne 0 -or (Compare-Object @($names | Sort-Object) @($archived | Sort-Object))) { throw 'The archive contents differ from the approved files.' }
+  [IO.File]::Move($tempArchive, $archivePath)
+} finally {
+  if ([IO.File]::Exists($tempArchive)) { [IO.File]::Delete($tempArchive) }
+}
+$receipt = [pscustomobject]@{ archive=(Split-Path -Leaf $archivePath); entries=$names.Count; bytes=(Get-Item -LiteralPath $archivePath).Length; sha256=(Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() }
+$receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $release 'web-package.json') -Encoding utf8
 $receipt | ConvertTo-Json

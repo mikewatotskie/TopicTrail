@@ -4,6 +4,10 @@ import { getBrowserClient, type IndexedDbClient } from './web/indexeddb_client';
 import { createWebDocumentPort } from './web/document_port';
 import { resolveGuestUploadPolicy, type GuestUploadPolicy } from '../config/guest_upload_policy';
 import { snapshotImportAttempt } from './document_import_contract';
+import { CloudLibraryRuntime } from './cloud/runtime';
+import { readDocumentBytes as readLegacyBytes } from './legacy_document_content.web';
+import { createCloudCache } from './cloud/cache.web';
+import { cloudFetch } from './cloud/transport_fetch.web';
 
 export function createWebDocumentStore(getClient: () => Promise<IndexedDbClient>,
   guestUploadPolicy: GuestUploadPolicy = resolveGuestUploadPolicy('web')): DocumentStorageApi {
@@ -31,5 +35,7 @@ export function createWebDocumentStore(getClient: () => Promise<IndexedDbClient>
 }
 const store = createWebDocumentStore(getBrowserClient);
 export class DocumentStorage {
-  static get instance(): DocumentStorageApi { return store; }
+  static get instance(): DocumentStorageApi { return getCloudLibrary().documents; }
 }
+let cloud: CloudLibraryRuntime | undefined;
+export function getCloudLibrary(): CloudLibraryRuntime { return cloud ??= new CloudLibraryRuntime(store, readLegacyBytes, {cache:createCloudCache,fetcher:cloudFetch}); }

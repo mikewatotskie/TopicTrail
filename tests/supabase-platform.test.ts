@@ -45,7 +45,6 @@ test('native platform stores sessions only through SecureStore, forwards activit
     allowed = false; await assert.rejects(guarded.storage.setItem(key, 'synthetic'), /session storage is unavailable/); assert.equal(values.size, 0);
     allowed = true; failure = true;
     await assert.rejects(guarded.storage.getItem(key), error => /session storage is unavailable/.test(String(error)) && !String(error).includes('PRIVATE'));
-    assert.equal(platform.authCallbackUrl(), 'topictrail://auth/callback');
   } finally {
     if (previous) Object.defineProperty(globalThis, '__ttSecureFixture', previous); else Reflect.deleteProperty(globalThis, '__ttSecureFixture');
   }
