@@ -226,7 +226,7 @@ dependencies {
         implementation('commons-io:commons-io:2.16.1') {
             because 'Use a patched Commons IO for Expo document and file APIs.'
         }
-        implementation('com.google.code.gson:gson:2.8.9') {
+        implementation('com.google.code.gson:gson:2.15.0') {
             because 'Use patched Gson when it is pulled in by the Expo log box.'
         }
         implementation('com.google.guava:guava:33.7.2-android') {
