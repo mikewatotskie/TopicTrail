@@ -223,7 +223,7 @@ android {
 
 dependencies {
     constraints {
-        implementation('commons-io:commons-io:2.16.1') {
+        implementation('commons-io:commons-io:2.22.0') {
             because 'Use a patched Commons IO for Expo document and file APIs.'
         }
         implementation('com.google.code.gson:gson:2.8.9') {
